@@ -77,7 +77,8 @@ flagged, not silently skipped — offer to extract the embedded preview via
 `exiftool -b -PreviewImage`.
 
 **Input folder:** user picks it (SD card or anywhere). Read-only. Never write
-to or delete from the input folder.
+to or delete from the input folder. Sessions are scoped to selected capture
+dates rather than the whole folder — see `SESSION-FLOW.md`.
 
 **Output folder:** user picks it. On finishing a session:
 
@@ -98,12 +99,14 @@ disposable and regenerable.
 ## 6. Screens
 
 ### Start
-Pick input folder, pick output folder, show pair count found, begin.
+Superseded — see `SESSION-FLOW.md`. The flow is input folder → calendar →
+destination → cull, so that one outing is processed at a time and sessions
+can be paused and resumed.
 
 ### Cull (the core screen)
 Photo fills the space. Below it, three buttons: **Keep** / **Keep & mark great**
-/ **Discard**. Below that, the tag field, visible only after a keep. A dot strip
-under the photo shows the last ~30 decisions colour-coded.
+/ **Discard**. Below that, the tag field, visible only after a keep. Above the
+photo, a thumbnail strip that expands into a grid — see `SESSION-FLOW.md` §3–4.
 
 Keeping opens the tag field pre-filled with the previous species. Discarding
 skips tagging and advances immediately.
@@ -211,14 +214,17 @@ Do not build any of this in v1.
 
 ## 10. Build order
 
-1. pywebview shell with folder pickers, loading the prototype front-end unchanged.
-2. Ingest: scan folder, pair RAW+JPEG, generate preview cache with progress.
-3. Wire the existing cull/tag UI to real files via the JS bridge.
-4. Session persistence — an interrupted session must resume exactly where it
+1. pywebview shell loading the prototype front-end unchanged.
+2. Ingest: scan input folder, read EXIF dates only, pair RAW+JPEG, build index.
+3. Calendar and destination screens (`SESSION-FLOW.md` §2).
+4. Preview and thumbnail caches for the selected dates, generated lazily.
+5. Wire the cull/tag UI to real files via the JS bridge.
+6. Thumbnail strip and grid view (`SESSION-FLOW.md` §3–5).
+7. Session persistence — an interrupted session must resume exactly where it
    stopped. Not optional; sessions will be interrupted.
-5. Output: copy files, write XMP via exiftool, verify by reading back.
-6. SQLite index + `winnow find` CLI.
-7. Package as a `.app`.
+8. Output: copy files, write XMP via exiftool, verify by reading back.
+9. SQLite index + `winnow find` CLI.
+10. Package as a `.app`.
 
 ## 11. Open questions to resolve while building
 

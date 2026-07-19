@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Winnow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#131519; --surface:#1a1d22; --surface2:#22262c; --line:#2c313a;
+  --ink:#e9e7e2; --muted:#8a9099; --faint:#5b616a;
+  --keep:#8aa882; --great:#d2a63f; --reject:#b06b60; --note:#7d95a6;
+  --sans:'Instrument Sans',system-ui,sans-serif;
+  --serif:'Instrument Serif',Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit;background:none;border:0;outline:0}
+.sci{font-family:var(--serif);font-style:italic;color:var(--muted)}
+.screen{height:100vh;display:none;flex-direction:column}
+.screen.on{display:flex}
+
+.bar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;flex:0 0 auto;gap:20px}
+.bar .site{font-size:14px;color:var(--muted)}
+.bar .count{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rule{height:1px;background:var(--line);position:relative;flex:0 0 auto}
+.rule i{position:absolute;left:0;top:0;height:1px;background:var(--keep);transition:width .18s ease}
+
+.stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;padding:8px 28px;min-height:0;position:relative}
+.stage img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+
+/* thumbnail strip — top of cull screen, the one persistent-chrome exception (SESSION-FLOW.md §3) */
+.thumbbar{flex:0 0 auto;height:64px;position:relative;border-bottom:1px solid var(--line);
+  background:var(--surface);transition:height .15s ease,opacity .15s ease;overflow:hidden}
+.thumbbar.collapsed{height:0;border-bottom-color:transparent;opacity:0}
+.thumbstrip-scroll{width:100%;height:100%;overflow-x:auto;overflow-y:hidden;position:relative}
+.thumbstrip-track{position:relative;height:100%}
+.thumb-toggle{position:absolute;right:6px;top:6px;width:20px;height:20px;border:1px solid var(--line);
+  border-radius:3px;background:var(--surface);font-size:11px;color:var(--faint);z-index:3;line-height:1}
+.thumb-toggle:hover{border-color:var(--muted);color:var(--ink)}
+.thumb{position:absolute;top:6px;width:56px;height:52px;border-radius:2px;overflow:hidden;cursor:pointer;
+  background:var(--surface2);border:2px solid transparent}
+.thumb.now{border-color:var(--ink)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.mark{position:absolute;bottom:3px;right:3px;width:14px;height:14px;border-radius:50%;font-size:9px;
+  color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px rgba(0,0,0,.55)}
+.mark.k{background:var(--keep)} .mark.g{background:var(--great)} .mark.r{background:var(--reject)}
+
+/* failed generation — never a silent blank frame */
+.thumb.failed,.gtile.failed{background:rgba(176,107,96,.12);border-color:var(--reject)}
+.thumb-err{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  color:var(--reject);font-size:15px;font-weight:600}
+.stage-error{display:none;position:absolute;inset:0;align-items:center;justify-content:center;
+  text-align:center;padding:0 60px;color:var(--reject);font-size:13px}
+.stage-error.on{display:flex}
+
+/* grid view */
+#s-grid{background:var(--bg)}
+.grid-bar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:14px 28px;gap:20px}
+.grid-summary{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.grid-controls{display:flex;align-items:center;gap:8px}
+.grid-controls .btn{padding:6px 13px;font-size:13px}
+#grid-discard-btn{border-color:var(--reject);color:var(--reject)}
+#grid-discard-btn:hover{background:rgba(176,107,96,.1);border-color:var(--reject)}
+.grid-scroll{flex:1 1 auto;overflow-y:auto;padding:0 28px 28px;position:relative}
+.grid-track{position:relative;width:100%}
+.gtile{position:absolute;cursor:pointer;border-radius:3px;overflow:hidden;background:var(--surface2);
+  border:2px solid transparent}
+.gtile.cursor{border-color:var(--ink)}
+.gtile.sel{box-shadow:0 0 0 2px var(--keep) inset}
+.gtile img{width:100%;height:100%;object-fit:cover;display:block}
+
+.verdicts{flex:0 0 auto;display:flex;gap:10px;padding:14px 28px 0}
+.vb{flex:1;border:1px solid var(--line);border-radius:4px;padding:14px 10px;text-align:center;
+   transition:border-color .14s,background .14s,color .14s}
+.vb b{display:block;font-weight:400;font-size:15px}
+.vb span{display:block;font-size:11px;color:var(--faint);margin-top:3px;letter-spacing:.06em;text-transform:uppercase}
+.vb:hover{border-color:var(--muted);background:var(--surface)}
+.vb.keep.on{border-color:var(--keep);color:var(--keep);background:rgba(138,168,130,.1)}
+.vb.great.on{border-color:var(--great);color:var(--great);background:rgba(210,166,63,.1)}
+.vb.rej.on{border-color:var(--reject);color:var(--reject);background:rgba(176,107,96,.1)}
+.vb.on span{color:inherit;opacity:.7}
+.vb.cursor{box-shadow:0 0 0 1px var(--ink)}
+.finish{border:1px solid var(--line);border-radius:3px;padding:5px 13px;font-size:13px;color:var(--muted)}
+.finish:hover{border-color:var(--muted);color:var(--ink)}
+
+.tagpane{flex:0 0 auto;padding:14px 28px 0;display:none}
+.tagpane.on{display:block}
+.chips{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-height:36px;
+      border-bottom:1px solid var(--line);padding-bottom:8px}
+.chip{border:1px solid var(--keep);color:var(--keep);border-radius:3px;padding:5px 11px;font-size:14px;display:flex;gap:9px;align-items:baseline}
+.chip.n{border-color:var(--note);color:var(--note)}
+.chip .x{color:var(--faint);font-size:12px}
+.chips input{flex:1;min-width:210px;padding:6px 0;font-size:16px}
+.sugg{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;min-height:32px;align-items:center}
+.sugg button{border:1px solid var(--line);padding:6px 12px;border-radius:3px;font-size:13px;display:flex;gap:8px;align-items:baseline}
+.sugg button:hover{border-color:var(--muted);background:var(--surface)}
+.sugg .n{font-size:11px;color:var(--faint);width:11px}
+.sugg .kind{font-size:11px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase}
+.sugg .nextbtn{margin-left:auto;border-color:var(--keep);color:var(--keep)}
+.sugg .nextbtn:hover{background:rgba(138,168,130,.1);border-color:var(--keep)}
+
+.keys{flex:0 0 auto;display:flex;gap:22px;padding:14px 28px 18px;font-size:12px;color:var(--faint);flex-wrap:wrap}
+.keys b{color:var(--muted);font-weight:500;margin-right:6px}
+
+.mid{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:40px;text-align:center;overflow-y:auto}
+#s-start{position:relative}
+.corner-link{position:absolute;right:20px;bottom:18px;font-size:12px;color:var(--faint)}
+.corner-link:hover{color:var(--muted)}
+h1{font-family:var(--serif);font-style:italic;font-size:44px;font-weight:400}
+.lede{color:var(--muted);max-width:47ch}
+.btn{border:1px solid var(--line);padding:11px 22px;border-radius:3px;transition:border-color .15s,background .15s}
+.btn:hover{border-color:var(--muted);background:var(--surface)}
+.btn.go{border-color:var(--keep);color:var(--keep)}
+.btn.go:hover{background:rgba(138,168,130,.09)}
+
+.panel{flex:1 1 auto;overflow-y:auto;padding:0 28px 28px;max-width:880px;width:100%;margin:0 auto}
+.stat{display:flex;gap:40px;padding:20px 0 26px;border-bottom:1px solid var(--line);margin-bottom:24px;flex-wrap:wrap}
+.stat div span{display:block;font-size:12px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px}
+.stat div b{font-size:28px;font-weight:400;font-variant-numeric:tabular-nums}
+.search{display:flex;border:1px solid var(--line);border-radius:3px;padding:11px 15px;margin-bottom:14px}
+.search input{flex:1;font-size:15px}
+.quick{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.quick button{border:1px solid var(--line);border-radius:3px;padding:5px 12px;font-size:12px;color:var(--muted)}
+.quick button:hover{border-color:var(--muted)}
+.row{display:flex;align-items:center;gap:14px;padding:9px 0;border-bottom:1px solid var(--surface2);font-size:14px}
+.row img{width:74px;height:50px;object-fit:cover;border-radius:2px;background:var(--surface);flex:0 0 auto}
+.row .f{color:var(--faint);font-size:12px;min-width:112px;font-variant-numeric:tabular-nums}
+.row .sp{flex:1}
+.row .nt{color:var(--note);font-size:12px}
+.row .st{color:var(--great);font-size:12px;min-width:12px}
+.xmp{background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:16px 18px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.75;color:var(--muted);white-space:pre-wrap}
+h3{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin:30px 0 12px}
+.foot{flex:0 0 auto;display:flex;gap:12px;padding:16px 28px;border-top:1px solid var(--line);flex-wrap:wrap}
+.empty{color:var(--faint);padding:26px 0;font-size:14px}
+
+/* folder picker rows (pywebview mode) */
+.folder-ui{display:none;flex-direction:column;gap:10px;width:100%;max-width:480px}
+.folder-row{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:3px;padding:10px 15px;position:relative}
+.folder-row .label{font-size:12px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;min-width:55px;flex:0 0 auto}
+.folder-row .path{flex:1;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.folder-row input.path{background:none}
+.folder-row .btn{padding:5px 13px;font-size:13px;flex-shrink:0}
+.go[disabled],.go:disabled{cursor:default;opacity:.4}
+.go[disabled]:hover,.go:disabled:hover{border-color:var(--keep);background:none}
+.btn:disabled{cursor:default;opacity:.4;pointer-events:none}
+.choice{display:flex;gap:8px}
+.choice-opt{border:1px solid var(--line);padding:6px 14px;border-radius:3px;font-size:13px;color:var(--muted)}
+.choice-opt:hover{border-color:var(--muted);color:var(--ink)}
+.choice-opt.on{border-color:var(--keep);color:var(--keep);background:rgba(138,168,130,.1)}
+.panel.done-panel{display:none}
+.panel.done-panel.on{display:block}
+.foot.done-foot{display:none}
+.foot.done-foot.on{display:flex}
+
+/* calendar screen */
+.cal-wrap{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;padding:50px 40px;gap:18px;overflow-y:auto}
+.cal-nav{display:flex;align-items:center;gap:18px}
+.cal-nav button{border:1px solid var(--line);border-radius:3px;padding:6px 13px}
+.cal-nav button:hover{border-color:var(--muted);background:var(--surface)}
+.cal-nav h2{font-family:var(--serif);font-style:italic;font-size:26px;font-weight:400;min-width:230px;text-align:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,64px);gap:6px}
+.cal-dow{font-size:11px;color:var(--faint);text-align:center;text-transform:uppercase;letter-spacing:.06em;padding-bottom:4px}
+.cal-day{position:relative;height:64px;border:1px solid transparent;border-radius:4px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--faint)}
+.cal-day.inert{opacity:.3}
+.cal-day.active{cursor:pointer;color:var(--ink);border-color:var(--line)}
+.cal-day.active:hover{border-color:var(--muted);background:var(--surface)}
+.cal-day.sel{border-color:var(--keep);background:rgba(138,168,130,.12);color:var(--keep)}
+.cal-day .n{font-size:15px}
+.cal-day .c{font-size:10px;color:var(--faint);font-variant-numeric:tabular-nums}
+.cal-day.sel .c{color:var(--keep);opacity:.85}
+.cal-day .ring{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%}
+.cal-hint{font-size:12px;color:var(--faint)}
+
+/* destination screen autocomplete */
+.autocomplete{position:absolute;top:100%;left:0;right:0;background:var(--surface2);border:1px solid var(--line);
+  border-radius:3px;margin-top:4px;max-height:170px;overflow-y:auto;z-index:5;display:none}
+.autocomplete.on{display:block}
+.autocomplete div{padding:8px 15px;font-size:13px;cursor:pointer}
+.autocomplete div:hover{background:var(--surface)}
+</style>
+</head>
+<body>
+
+<section class="screen on" id="s-start">
+  <button class="corner-link" id="settings-link" onclick="openSettings()" style="display:none">Settings</button>
+  <div class="mid">
+    <h1>Winnow</h1>
+    <p class="lede">Sort and tag in one pass. Keep a photo and the tag field opens straight away; the last species carries over, so a run of the same bird is two keys each. Mouse or keyboard, both work.</p>
+
+    <!-- native folder picker shown when running inside pywebview -->
+    <div class="folder-ui" id="folder-ui">
+      <div class="folder-row">
+        <span class="label">Input</span>
+        <span class="path" id="s-in-path">Not set</span>
+        <button class="btn" onclick="chooseInputFolder()">Choose…</button>
+      </div>
+      <p class="lede" id="s-scan-status" style="font-size:13px;min-height:18px"></p>
+    </div>
+
+    <!-- file picker fallback for opening as plain HTML in a browser -->
+    <div id="browser-ui">
+      <input type="file" id="pick" accept="image/*" multiple hidden>
+      <button class="btn go" onclick="document.getElementById('pick').click()">Choose photos</button>
+      <p class="lede" style="font-size:13px;color:var(--faint);margin-top:4px">Nothing leaves your machine — try it with wifi off. Export JPEGs from a real session; raw won't preview in a browser.</p>
+    </div>
+  </div>
+</section>
+
+<section class="screen" id="s-settings">
+  <div class="mid">
+    <h1 style="font-size:32px">Settings</h1>
+    <div class="folder-ui" style="display:flex">
+      <div class="folder-row">
+        <span class="label">exiftool</span>
+        <span class="path" id="settings-exiftool-path">Checking…</span>
+      </div>
+      <p class="lede" id="settings-exiftool-detail" style="font-size:12px;min-height:16px"></p>
+
+      <div class="folder-row">
+        <span class="label">Raw files</span>
+        <div class="choice" id="settings-raw-handling">
+          <button class="choice-opt" data-val="copy" onclick="setRawHandling('copy')">Copy</button>
+          <button class="choice-opt" data-val="move" onclick="setRawHandling('move')">Move</button>
+        </div>
+      </div>
+      <p class="lede" style="font-size:12px">Copy leaves the originals on the card. Move deletes them from the card only after a verified copy exists at the destination.</p>
+
+      <div class="folder-row">
+        <span class="label">JPEGs</span>
+        <button class="choice-opt" id="settings-copy-jpegs" onclick="toggleCopyJpegs()">Also copy JPEGs to the output folder</button>
+      </div>
+
+      <button class="btn" onclick="go('s-start')">&larr; Back</button>
+    </div>
+  </div>
+</section>
+
+<section class="screen" id="s-calendar">
+  <div class="cal-wrap">
+    <h1>Pick a day</h1>
+    <div class="cal-nav">
+      <button onclick="calShiftMonth(-1)">&larr;</button>
+      <h2 id="cal-month"></h2>
+      <button onclick="calShiftMonth(1)">&rarr;</button>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <p class="cal-hint">Click a day. Shift-click for a range, &#8984;-click to add days that aren't next to each other.</p>
+    <button class="btn go" id="cal-continue" onclick="goDestination()" disabled>Continue &rarr;</button>
+  </div>
+</section>
+
+<section class="screen" id="s-destination">
+  <div class="mid">
+    <h1 style="font-size:32px">Where does this go?</h1>
+    <div class="folder-ui" style="display:flex">
+      <div class="folder-row">
+        <span class="label">Parent</span>
+        <span class="path" id="dest-parent-path">Not set</span>
+        <button class="btn" onclick="chooseParentFolder()">Choose…</button>
+      </div>
+      <div class="folder-row">
+        <span class="label">Location</span>
+        <input id="dest-location" class="path" placeholder="e.g. Spurn" autocomplete="off">
+        <div class="autocomplete" id="dest-loc-sugg"></div>
+      </div>
+      <div class="folder-row">
+        <span class="label">Folder</span>
+        <input id="dest-name" class="path" autocomplete="off">
+      </div>
+      <p class="lede" id="dest-status" style="font-size:12px;min-height:16px"></p>
+      <button class="btn go" id="dest-begin" onclick="beginSession()">Begin &rarr;</button>
+      <button class="btn" style="font-size:13px" onclick="go('s-calendar')">&larr; Back to calendar</button>
+    </div>
+  </div>
+</section>
+
+<section class="screen" id="s-cull">
+  <div class="bar"><span class="site" id="c-site"></span>
+    <span class="count"><span id="c-count"></span>
+      <button class="finish" style="margin-left:16px" onclick="openGrid()" title="Grid view (tab)">Grid</button>
+      <button class="finish" onclick="finish()">Finish</button></span></div>
+  <div class="rule"><i id="c-prog"></i></div>
+  <div class="thumbbar" id="c-thumbbar">
+    <div class="thumbstrip-scroll" id="c-thumbstrip-scroll"><div class="thumbstrip-track" id="c-thumbstrip"></div></div>
+    <button class="thumb-toggle" onclick="toggleStrip()" title="Collapse strip (s)">&and;</button>
+  </div>
+  <div class="stage"><img id="c-img" alt=""><div class="stage-error" id="c-stage-error">Couldn't load this preview — see the terminal for why, or check Settings for the exiftool path.</div></div>
+  <div class="verdicts">
+    <button class="vb keep" id="vb-keep" onclick="pick(0)"><b>Keep</b><span>space</span></button>
+    <button class="vb great" id="vb-great" onclick="pick(1)"><b>Keep &amp; mark great</b><span>g</span></button>
+    <button class="vb rej" id="vb-rej" onclick="pick(2)"><b>Discard</b><span>x</span></button>
+  </div>
+  <div class="tagpane" id="c-pane">
+    <div class="chips" id="c-chips"></div>
+    <div class="sugg" id="c-sugg"></div>
+  </div>
+  <div class="keys" id="c-keys"></div>
+</section>
+
+<section class="screen" id="s-grid">
+  <div class="grid-bar">
+    <button class="btn" onclick="closeGrid()">&larr; Back to culling</button>
+    <span class="grid-summary" id="grid-summary"></span>
+    <div class="grid-controls">
+      <button class="btn" onclick="resizeGrid(-20)" title="Smaller (-)">&minus;</button>
+      <button class="btn" onclick="resizeGrid(20)" title="Larger (+)">&plus;</button>
+      <button class="btn" id="grid-discard-btn" onclick="discardGridSelection()" title="Discard selection (x)">Discard &rarr;</button>
+    </div>
+  </div>
+  <div class="grid-scroll" id="grid-scroll"><div class="grid-track" id="grid-track"></div></div>
+</section>
+
+<section class="screen" id="s-done">
+  <div class="bar"><span class="site">Session output</span>
+    <span class="count"><button class="btn" id="d-start-over-btn" style="padding:5px 14px;font-size:13px" onclick="reset()">Start over</button></span></div>
+  <div class="rule"><i style="width:100%"></i></div>
+
+  <div class="panel done-panel on" id="d-review">
+    <div class="stat">
+      <div><span>Kept</span><b id="d-kept">0</b></div>
+      <div><span>Discarded</span><b id="d-rej">0</b></div>
+      <div><span>Great</span><b id="d-great">0</b></div>
+      <div><span>Species</span><b id="d-sp">0</b></div>
+      <div><span>Untagged</span><b id="d-un">0</b></div>
+    </div>
+    <div class="search"><input id="d-q" placeholder="dunnock · nesting · great · untagged" autocomplete="off"></div>
+    <div class="quick" id="d-quick"></div>
+    <div id="d-rows"></div>
+  </div>
+  <div class="foot done-foot on" id="d-review-foot">
+    <p class="lede" id="d-write-error" style="font-size:12px;color:var(--reject);min-height:16px;width:100%"></p>
+    <button class="btn" onclick="backToCulling()">&larr; Back to culling</button>
+    <button class="btn go" id="d-write-btn" onclick="startWrite()">Write to output folder &rarr;</button>
+  </div>
+
+  <div class="panel done-panel" id="d-writing">
+    <h3>Writing to output folder</h3>
+    <div class="rule" style="margin:4px 0 14px"><i id="d-write-prog"></i></div>
+    <p class="lede" id="d-write-status" style="font-size:13px"></p>
+  </div>
+  <div class="foot done-foot" id="d-writing-foot">
+    <button class="btn" onclick="cancelWrite()">Cancel</button>
+  </div>
+
+  <div class="panel done-panel" id="d-written">
+    <p class="lede" id="d-w-summary" style="font-size:14px;color:var(--ink)"></p>
+    <div class="stat">
+      <div><span>Copied</span><b id="d-w-copied">0</b></div>
+      <div><span>Skipped</span><b id="d-w-skipped">0</b></div>
+      <div><span>Sidecars written</span><b id="d-w-xmp">0</b></div>
+      <div><span>Failed</span><b id="d-w-failed">0</b></div>
+    </div>
+    <p class="lede" style="font-size:12px">Destination: <span id="d-w-dest" style="color:var(--muted)"></span></p>
+    <div id="d-w-failures"></div>
+    <h3>Sidecar written</h3>
+    <div class="xmp" id="d-xmp"></div>
+  </div>
+  <div class="foot done-foot" id="d-written-foot">
+    <button class="btn" onclick="backToCulling()">&larr; Back to culling</button>
+    <button class="btn" id="d-reveal-btn" onclick="revealOutput()">Reveal in Finder</button>
+    <button class="btn go" id="d-write-again-btn" onclick="startWrite()">Write again &rarr;</button>
+  </div>
+</section>
+
+<script>
+const SPECIES=[["Dunnock","Prunella modularis"],["Robin","Erithacus rubecula"],["Wren","Troglodytes troglodytes"],["Blackbird","Turdus merula"],["Song thrush","Turdus philomelos"],["Mistle thrush","Turdus viscivorus"],["Redwing","Turdus iliacus"],["Fieldfare","Turdus pilaris"],["Blue tit","Cyanistes caeruleus"],["Great tit","Parus major"],["Coal tit","Periparus ater"],["Marsh tit","Poecile palustris"],["Willow tit","Poecile montanus"],["Crested tit","Lophophanes cristatus"],["Long-tailed tit","Aegithalos caudatus"],["Chaffinch","Fringilla coelebs"],["Brambling","Fringilla montifringilla"],["Goldfinch","Carduelis carduelis"],["Greenfinch","Chloris chloris"],["Linnet","Linaria cannabina"],["Twite","Linaria flavirostris"],["Lesser redpoll","Acanthis cabaret"],["Siskin","Spinus spinus"],["Bullfinch","Pyrrhula pyrrhula"],["Hawfinch","Coccothraustes coccothraustes"],["Crossbill","Loxia curvirostra"],["Yellowhammer","Emberiza citrinella"],["Reed bunting","Emberiza schoeniclus"],["Corn bunting","Emberiza calandra"],["Snow bunting","Plectrophenax nivalis"],["House sparrow","Passer domesticus"],["Tree sparrow","Passer montanus"],["Starling","Sturnus vulgaris"],["Pied wagtail","Motacilla alba"],["Grey wagtail","Motacilla cinerea"],["Yellow wagtail","Motacilla flava"],["Meadow pipit","Anthus pratensis"],["Rock pipit","Anthus petrosus"],["Tree pipit","Anthus trivialis"],["Skylark","Alauda arvensis"],["Swallow","Hirundo rustica"],["House martin","Delichon urbicum"],["Sand martin","Riparia riparia"],["Swift","Apus apus"],["Chiffchaff","Phylloscopus collybita"],["Willow warbler","Phylloscopus trochilus"],["Blackcap","Sylvia atricapilla"],["Garden warbler","Sylvia borin"],["Whitethroat","Curruca communis"],["Lesser whitethroat","Curruca curruca"],["Sedge warbler","Acrocephalus schoenobaenus"],["Reed warbler","Acrocephalus scirpaceus"],["Cetti's warbler","Cettia cetti"],["Goldcrest","Regulus regulus"],["Firecrest","Regulus ignicapilla"],["Spotted flycatcher","Muscicapa striata"],["Pied flycatcher","Ficedula hypoleuca"],["Redstart","Phoenicurus phoenicurus"],["Black redstart","Phoenicurus ochruros"],["Stonechat","Saxicola rubicola"],["Whinchat","Saxicola rubetra"],["Wheatear","Oenanthe oenanthe"],["Nuthatch","Sitta europaea"],["Treecreeper","Certhia familiaris"],["Great spotted woodpecker","Dendrocopos major"],["Green woodpecker","Picus viridis"],["Lesser spotted woodpecker","Dryobates minor"],["Kingfisher","Alcedo atthis"],["Cuckoo","Cuculus canorus"],["Magpie","Pica pica"],["Jay","Garrulus glandarius"],["Jackdaw","Corvus monedula"],["Rook","Corvus frugilegus"],["Carrion crow","Corvus corone"],["Raven","Corvus corax"],["Curlew","Numenius arquata"],["Whimbrel","Numenius phaeopus"],["Bar-tailed godwit","Limosa lapponica"],["Black-tailed godwit","Limosa limosa"],["Oystercatcher","Haematopus ostralegus"],["Avocet","Recurvirostra avosetta"],["Lapwing","Vanellus vanellus"],["Golden plover","Pluvialis apricaria"],["Grey plover","Pluvialis squatarola"],["Ringed plover","Charadrius hiaticula"],["Little ringed plover","Charadrius dubius"],["Knot","Calidris canutus"],["Sanderling","Calidris alba"],["Dunlin","Calidris alpina"],["Curlew sandpiper","Calidris ferruginea"],["Little stint","Calidris minuta"],["Purple sandpiper","Calidris maritima"],["Turnstone","Arenaria interpres"],["Redshank","Tringa totanus"],["Spotted redshank","Tringa erythropus"],["Greenshank","Tringa nebularia"],["Green sandpiper","Tringa ochropus"],["Wood sandpiper","Tringa glareola"],["Common sandpiper","Actitis hypoleucos"],["Snipe","Gallinago gallinago"],["Jack snipe","Lymnocryptes minimus"],["Woodcock","Scolopax rusticola"],["Ruff","Calidris pugnax"],["Grey heron","Ardea cinerea"],["Little egret","Egretta garzetta"],["Great white egret","Ardea alba"],["Spoonbill","Platalea leucorodia"],["Bittern","Botaurus stellaris"],["Mute swan","Cygnus olor"],["Whooper swan","Cygnus cygnus"],["Bewick's swan","Cygnus columbianus"],["Greylag goose","Anser anser"],["Pink-footed goose","Anser brachyrhynchus"],["Brent goose","Branta bernicla"],["Barnacle goose","Branta leucopsis"],["Canada goose","Branta canadensis"],["Shelduck","Tadorna tadorna"],["Mallard","Anas platyrhynchos"],["Teal","Anas crecca"],["Wigeon","Mareca penelope"],["Gadwall","Mareca strepera"],["Pintail","Anas acuta"],["Shoveler","Spatula clypeata"],["Tufted duck","Aythya fuligula"],["Pochard","Aythya ferina"],["Scaup","Aythya marila"],["Eider","Somateria mollissima"],["Common scoter","Melanitta nigra"],["Velvet scoter","Melanitta fusca"],["Goldeneye","Bucephala clangula"],["Goosander","Mergus merganser"],["Red-breasted merganser","Mergus serrator"],["Little grebe","Tachybaptus ruficollis"],["Great crested grebe","Podiceps cristatus"],["Slavonian grebe","Podiceps auritus"],["Black-necked grebe","Podiceps nigricollis"],["Cormorant","Phalacrocorax carbo"],["Shag","Gulosus aristotelis"],["Gannet","Morus bassanus"],["Fulmar","Fulmarus glacialis"],["Manx shearwater","Puffinus puffinus"],["Puffin","Fratercula arctica"],["Guillemot","Uria aalge"],["Razorbill","Alca torda"],["Kittiwake","Rissa tridactyla"],["Black-headed gull","Chroicocephalus ridibundus"],["Common gull","Larus canus"],["Herring gull","Larus argentatus"],["Lesser black-backed gull","Larus fuscus"],["Great black-backed gull","Larus marinus"],["Mediterranean gull","Ichthyaetus melanocephalus"],["Little gull","Hydrocoloeus minutus"],["Glaucous gull","Larus hyperboreus"],["Iceland gull","Larus glaucoides"],["Sandwich tern","Thalasseus sandvicensis"],["Common tern","Sterna hirundo"],["Arctic tern","Sterna paradisaea"],["Little tern","Sternula albifrons"],["Arctic skua","Stercorarius parasiticus"],["Great skua","Stercorarius skua"],["Kestrel","Falco tinnunculus"],["Peregrine","Falco peregrinus"],["Merlin","Falco columbarius"],["Hobby","Falco subbuteo"],["Sparrowhawk","Accipiter nisus"],["Goshawk","Accipiter gentilis"],["Buzzard","Buteo buteo"],["Red kite","Milvus milvus"],["Marsh harrier","Circus aeruginosus"],["Hen harrier","Circus cyaneus"],["White-tailed eagle","Haliaeetus albicilla"],["Golden eagle","Aquila chrysaetos"],["Osprey","Pandion haliaetus"],["Barn owl","Tyto alba"],["Tawny owl","Strix aluco"],["Little owl","Athene noctua"],["Short-eared owl","Asio flammeus"],["Long-eared owl","Asio otus"],["Red grouse","Lagopus lagopus"],["Rock ptarmigan","Lagopus muta"],["Black grouse","Lyrurus tetrix"],["Pheasant","Phasianus colchicus"],["Grey partridge","Perdix perdix"],["Red-legged partridge","Alectoris rufa"],["Moorhen","Gallinula chloropus"],["Coot","Fulica atra"],["Water rail","Rallus aquaticus"],["Woodpigeon","Columba palumbus"],["Stock dove","Columba oenas"],["Collared dove","Streptopelia decaocto"],["Dipper","Cinclus cinclus"],["Waxwing","Bombycilla garrulus"]];
+
+let NOTES=[["Multiple birds","several flock group"],["Juvenile","baby chick young immature"],["Nesting","nest breeding"],["In flight","flying bif wings"],["Feeding","eating foraging prey"],["Displaying","display courtship"],["Perched",""],["Swimming","water"],["Pair","two"],["Flock","many"],["Calling","song singing"],["Ringed bird","ring colour-ring"],["Habitat","landscape scene"],["Portrait","close-up"]];
+
+const VERDICTS=[['keep',false],['keep',true],['rej',false]];
+let P=[],i=0,mode='view',sticky=null,hist=[],hits=[],screen='s-start',cur=0;
+const $=id=>document.getElementById(id);
+
+// ---- input folder + ingest scan ----
+
+let inputFolder='',parentFolder='',locations=[];
+let dateSummary=[]; // [{date:'YYYY-MM-DD'|null, count, uncertain}] from the last scan
+
+function chooseInputFolder(){
+  pywebview.api.pick_folder('Choose input folder').then(path=>{
+    if(!path)return;
+    inputFolder=path;
+    $('s-in-path').textContent=path;
+    pywebview.api.save_config({input_folder:path});
+    runScan(path);
+  });
+}
+
+function runScan(path){
+  $('s-scan-status').textContent='Scanning…';
+  pywebview.api.start_scan(path);
+}
+
+// called from Python via evaluate_js while a scan is running
+function onScanProgress(done,total){
+  $('s-scan-status').textContent=`Scanning… ${done} / ${total}`;
+}
+function onScanError(msg){
+  $('s-scan-status').textContent=`Couldn't read that folder: ${msg}`;
+}
+function onScanComplete(summary){
+  dateSummary=summary;
+  const total=summary.reduce((a,d)=>a+d.count,0);
+  const days=summary.filter(d=>d.date).length;
+  $('s-scan-status').textContent=total
+    ? `${total} photo${total===1?'':'s'} across ${days} day${days===1?'':'s'}.`
+    : 'No photos found in that folder.';
+  if(total){initCalendar();go('s-calendar');}
+}
+
+window.addEventListener('pywebviewready',()=>{
+  $('folder-ui').style.display='flex';
+  $('browser-ui').style.display='none';
+  $('settings-link').style.display='block';
+  pywebview.api.load_config().then(cfg=>{
+    inputFolder=cfg.input_folder||'';
+    parentFolder=cfg.parent_folder||'';
+    locations=cfg.locations||[];
+    $('s-in-path').textContent=inputFolder||'Not set';
+    if(inputFolder)runScan(inputFolder);
+  });
+});
+
+// ---- settings screen ----
+let settingsOptions={raw_handling:'copy',copy_jpegs:false};
+
+function openSettings(){
+  go('s-settings');
+  $('settings-exiftool-path').textContent='Checking…';
+  $('settings-exiftool-detail').textContent='';
+  pywebview.api.get_exiftool_status().then(s=>{
+    if(s.found){
+      $('settings-exiftool-path').textContent=s.path;
+      $('settings-exiftool-detail').textContent=`Version ${s.version}`;
+    }else{
+      $('settings-exiftool-path').textContent='Not found';
+      $('settings-exiftool-detail').textContent="Install it with 'brew install exiftool', then reopen Winnow.";
+    }
+  });
+  pywebview.api.load_config().then(cfg=>{
+    settingsOptions.raw_handling=cfg.raw_handling||'copy';
+    settingsOptions.copy_jpegs=!!cfg.copy_jpegs;
+    renderSettingsOptions();
+  });
+}
+function renderSettingsOptions(){
+  document.querySelectorAll('#settings-raw-handling .choice-opt').forEach(b=>
+    b.classList.toggle('on',b.dataset.val===settingsOptions.raw_handling));
+  $('settings-copy-jpegs').classList.toggle('on',settingsOptions.copy_jpegs);
+}
+function setRawHandling(v){
+  settingsOptions.raw_handling=v;
+  renderSettingsOptions();
+  pywebview.api.save_config({raw_handling:v});
+}
+function toggleCopyJpegs(){
+  settingsOptions.copy_jpegs=!settingsOptions.copy_jpegs;
+  renderSettingsOptions();
+  pywebview.api.save_config({copy_jpegs:settingsOptions.copy_jpegs});
+}
+
+// ---- calendar screen ----
+
+let calMonth=null,calSel=new Set(),calAnchor=null,dateInfo={};
+
+function initCalendar(){
+  dateInfo={};
+  dateSummary.forEach(d=>{if(d.date)dateInfo[d.date]={count:d.count,uncertain:d.uncertain,reviewed:d.reviewed||0};});
+  const dates=Object.keys(dateInfo).sort();
+  calMonth=dates.length?new Date(dates[0]+'T00:00:00'):new Date();
+  calMonth.setDate(1);
+  calSel=new Set();calAnchor=null;
+  renderCalendar();
+}
+
+function calShiftMonth(d){calMonth.setMonth(calMonth.getMonth()+d);renderCalendar();}
+function dkey(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+
+function renderCalendar(){
+  const y=calMonth.getFullYear(),m=calMonth.getMonth();
+  $('cal-month').textContent=calMonth.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const startOffset=(new Date(y,m,1).getDay()+6)%7; // Monday-first
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  let html=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  for(let i=0;i<startOffset;i++)html+='<div></div>';
+  for(let d=1;d<=daysInMonth;d++){
+    const key=dkey(y,m,d),info=dateInfo[key],active=!!info,sel=calSel.has(key);
+    const cls=['cal-day',active?'active':'inert',sel?'sel':''].filter(Boolean).join(' ');
+    const ringPct=active&&info.count?Math.round(info.reviewed/info.count*100):0;
+    const ring=active?`<span class="ring" style="background:conic-gradient(var(--keep) ${ringPct}%, var(--line) 0)"></span>`:'';
+    html+=`<div class="${cls}"${active?` onclick="calClick(event,'${key}')"`:''}>
+      <span class="n">${d}</span>${active?`<span class="c">${info.count}</span>`:''}${ring}
+    </div>`;
+  }
+  $('cal-grid').innerHTML=html;
+}
+
+function calClick(e,key){
+  if(e.shiftKey&&calAnchor){
+    const [lo,hi]=[calAnchor,key].sort();
+    calSel=new Set(Object.keys(dateInfo).filter(k=>k>=lo&&k<=hi));
+  }else if(e.metaKey||e.ctrlKey){
+    if(calSel.has(key))calSel.delete(key);else calSel.add(key);
+    calAnchor=key;
+  }else{
+    calSel=new Set([key]);calAnchor=key;
+  }
+  renderCalendar();
+  const btn=$('cal-continue');btn.disabled=!calSel.size;
+}
+
+// ---- destination screen ----
+
+let destNameDirty=false;
+
+function sortedSel(){return [...calSel].sort();}
+
+function goDestination(){
+  if(!calSel.size)return;
+  $('dest-parent-path').textContent=parentFolder||'Not set';
+  $('dest-location').value='';
+  destNameDirty=false;
+  $('dest-loc-sugg').classList.remove('on');
+  updateDestName();
+  go('s-destination');
+  $('dest-location').focus();
+}
+
+function chooseParentFolder(){
+  pywebview.api.pick_folder('Choose parent folder').then(path=>{
+    if(!path)return;
+    parentFolder=path;
+    $('dest-parent-path').textContent=path;
+    pywebview.api.save_config({parent_folder:path});
+    checkDestExists();
+  });
+}
+
+function computedName(){
+  const dates=sortedSel(),loc=$('dest-location').value.trim();
+  if(!dates.length)return '';
+  const range=dates.length>1?`${dates[0]} - ${dates[dates.length-1]}`:dates[0];
+  return loc?`${range} ${loc}`:range;
+}
+
+function updateDestName(){
+  if(!destNameDirty)$('dest-name').value=computedName();
+  checkDestExists();
+}
+
+function locSuggest(q){
+  q=q.trim().toLowerCase();
+  const box=$('dest-loc-sugg');
+  const hits=q?locations.filter(l=>l.toLowerCase().startsWith(q)).slice(0,6):[];
+  box.innerHTML=hits.map(l=>`<div onmousedown="pickLocation('${l.replace(/'/g,"\\'")}')">${l}</div>`).join('');
+  box.classList.toggle('on',hits.length>0);
+}
+function pickLocation(l){
+  $('dest-location').value=l;
+  $('dest-loc-sugg').classList.remove('on');
+  updateDestName();
+}
+
+$('dest-location').addEventListener('input',e=>{updateDestName();locSuggest(e.target.value);});
+$('dest-location').addEventListener('blur',()=>setTimeout(()=>$('dest-loc-sugg').classList.remove('on'),120));
+$('dest-name').addEventListener('input',()=>{destNameDirty=true;checkDestExists();});
+
+function checkDestExists(){
+  const name=$('dest-name').value.trim();
+  if(!parentFolder||!name){$('dest-status').textContent='';return;}
+  pywebview.api.folder_exists(parentFolder,name).then(exists=>{
+    $('dest-status').textContent=exists?'This folder already exists — resuming that session.':'';
+  });
+}
+
+// ---- session persistence ----
+// destPath is the resume key (SESSION-FLOW.md §2.3: reopening the same
+// destination folder is what "resuming" means). Every verdict/tag change
+// writes through immediately via persistPhoto() — see state.py.
+let destPath='';
+
+function joinPath(a,b){return a.replace(/\/+$/,'')+'/'+b;}
+
+function persistPhoto(idx){
+  const p=P[idx];
+  if(!destPath||!p||!p.identity||typeof pywebview==='undefined')return;
+  pywebview.api.save_verdict(destPath,p.identity,p.verdict,p.great,p.sp,p.nt);
+}
+
+function beginSession(){
+  const name=$('dest-name').value.trim();
+  if(!parentFolder||!name||!calSel.size)return;
+  const location=$('dest-location').value.trim();
+  if(location){
+    if(!locations.some(l=>l.toLowerCase()===location.toLowerCase()))locations=[location,...locations];
+    pywebview.api.add_location(location);
+  }
+  destPath=joinPath(parentFolder,name);
+  const dates=sortedSel();
+  Promise.all([
+    pywebview.api.photos_for_dates(dates),
+    pywebview.api.open_session(destPath,parentFolder,location,dates),
+  ]).then(([records,reviewState])=>{
+    P=records.map(r=>{
+      const saved=reviewState[r.identity];
+      return {
+        identity:r.identity,name:r.stem,
+        previewUrl:null,previewFailed:false,thumbUrl:null,thumbFailed:false,
+        date:r.capture_dt?new Date(r.capture_dt):new Date(),
+        dateUncertain:r.date_uncertain,
+        verdict:saved?saved.verdict:null,
+        great:saved?saved.great:false,
+        sp:saved?saved.sp:[],
+        nt:saved?saved.nt:[],
+      };
+    });
+    rebuildPhotoIndex();
+    // resume at the first unreviewed photo (SESSION-FLOW.md §6); if every
+    // photo already has a verdict, land past the end so paint() finishes.
+    const firstUnreviewed=P.findIndex(p=>!p.verdict);
+    i=firstUnreviewed===-1?P.length:firstUnreviewed;
+    hist=[];sticky=null;mode='view';
+    go('s-cull');paint();
+  });
+}
+
+// ---- preview cache wiring ----
+// The main stage image comes from the ~2000px preview cache (cache.py), not
+// the source JPEG/ORF directly — see CLAUDE.md's "never load full-size
+// JPEGs" gotcha. Generation is async and lazy; onCacheReady is Python's
+// evaluate_js callback for when a requested file lands on disk.
+
+let photoByIdentity=new Map();
+function rebuildPhotoIndex(){
+  photoByIdentity=new Map();
+  P.forEach(p=>{if(p.identity)photoByIdentity.set(p.identity,p);});
+}
+
+// path is null on a failed generation (cache.py logs why to the terminal) —
+// that's a distinct, permanent state from "still pending", so it's recorded
+// separately rather than just leaving previewUrl/thumbUrl unset forever.
+function onCacheReady(identity,kind,path){
+  const p=photoByIdentity.get(identity);
+  if(!p)return;
+  if(kind==='preview'){
+    if(path){p.previewUrl=path;p.previewFailed=false;}
+    else{p.previewFailed=true;}
+    if(P[i]&&P[i].identity===identity)showStageImage(p);
+  }else if(kind==='thumbnail'){
+    if(path){p.thumbUrl=path;p.thumbFailed=false;}
+    else{p.thumbFailed=true;}
+    if(screen==='s-cull')renderStrip();
+    else if(screen==='s-grid')renderGrid();
+  }
+}
+
+function showStageImage(p){
+  const img=$('c-img'),err=$('c-stage-error');
+  if(p.previewUrl){
+    img.src=p.previewUrl;img.style.visibility='visible';
+    err.classList.remove('on');
+  }else{
+    img.removeAttribute('src');img.style.visibility='hidden';
+    err.classList.toggle('on',!!p.previewFailed);
+  }
+}
+
+function loadStagePhoto(p){
+  showStageImage(p);
+  if(p.previewUrl||p.previewFailed||!p.identity||typeof pywebview==='undefined')return;
+  pywebview.api.request_image(p.identity,'preview',0).then(path=>{
+    if(!path)return; // still pending — onCacheReady will report success or failure
+    p.previewUrl=path;
+    if(P[i]&&P[i].identity===p.identity)showStageImage(p);
+  });
+}
+
+// lazy generation outward from the current photo, per SESSION-FLOW.md §7
+function prefetchAround(){
+  if(typeof pywebview==='undefined')return;
+  const RADIUS=4;
+  for(let off=-RADIUS;off<=RADIUS;off++){
+    if(off===0)continue; // current photo already requested by loadStagePhoto
+    const p=P[i+off];
+    if(!p||!p.identity||p.previewUrl||p.previewFailed)continue;
+    pywebview.api.request_image(p.identity,'preview',Math.abs(off)).then(path=>{
+      if(!path)return;
+      p.previewUrl=path;
+      if(P[i]&&P[i].identity===p.identity)showStageImage(p);
+    });
+  }
+}
+
+// ---- prototype file-picker logic (browser fallback) ----
+
+$('pick').addEventListener('change',e=>{
+  const f=[...e.target.files].filter(x=>x.type.startsWith('image/'));
+  if(!f.length)return;
+  f.sort((a,b)=>a.name.localeCompare(b.name));
+  P=f.map(file=>({file,name:file.name,previewUrl:URL.createObjectURL(file),
+    date:new Date(file.lastModified),verdict:null,great:false,sp:[],nt:[]}));
+  rebuildPhotoIndex();
+  i=0;hist=[];sticky=null;mode='view';go('s-cull');paint();
+});
+
+function go(id){screen=id;document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));}
+const pct=(a,b)=>b?Math.round(a/b*100)+'%':'0%';
+const kept=()=>P.filter(p=>p.verdict==='keep');
+
+function paint(){
+  if(i>=P.length)return finish();
+  const p=P[i];
+  loadStagePhoto(p);
+  prefetchAround();
+  $('c-site').textContent=p.date.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  $('c-count').textContent=`${i+1} of ${P.length}`;
+  $('c-prog').style.width=pct(i,P.length);
+  const B=[$('vb-keep'),$('vb-great'),$('vb-rej')];
+  B[0].classList.toggle('on',p.verdict==='keep'&&!p.great);
+  B[1].classList.toggle('on',p.verdict==='keep'&&p.great);
+  B[2].classList.toggle('on',p.verdict==='rej');
+  B.forEach((b,n)=>b.classList.toggle('cursor',mode==='view'&&n===cur));
+  scrollStripIntoView();
+  $('c-pane').classList.toggle('on',mode==='tag');
+  if(mode==='tag')chips();
+  $('c-keys').innerHTML = mode==='view'
+    ? `<span><b>&darr; &uarr;</b>photo</span><span><b>&larr; &rarr;</b>choose</span><span><b>enter</b>confirm</span>
+       <span><b>space g x</b>direct</span><span><b>tab</b>grid</span><span><b>s</b>strip</span>
+       <span><b>u</b>undo</span><span><b>f</b>finish</span>`
+    : `<span><b>type</b>species or note</span><span><b>1-5</b>add</span><span><b>enter</b>add, or next if empty</span>
+       <span><b>backspace</b>remove last</span><span><b>esc</b>next, untagged</span>`;
+}
+
+// ---- review marks (shared by strip + grid) ----
+function markHtml(p){
+  if(!p.verdict)return '';
+  const cls=p.verdict==='rej'?'r':p.great?'g':'k';
+  return `<span class="mark ${cls}">&#10003;</span>`;
+}
+
+// ---- thumbnail cache requests (shared by strip + grid) ----
+// priority = distance from the current photo, per SESSION-FLOW.md §7
+function requestThumb(idx){
+  const p=P[idx];
+  if(!p||!p.identity||p.thumbUrl||p.thumbFailed||typeof pywebview==='undefined')return;
+  pywebview.api.request_image(p.identity,'thumbnail',Math.abs(idx-i)).then(path=>{
+    if(!path)return; // still pending — onCacheReady will report success or failure
+    p.thumbUrl=path;
+    if(screen==='s-cull')renderStrip();
+    else if(screen==='s-grid')renderGrid();
+  });
+}
+
+// ---- thumbnail strip: virtualized, horizontal, top of cull screen ----
+const THUMB_W=56,THUMB_GAP=4,THUMB_STEP=THUMB_W+THUMB_GAP,THUMB_BUFFER=6;
+let stripCollapsed=false;
+
+function toggleStrip(){
+  stripCollapsed=!stripCollapsed;
+  $('c-thumbbar').classList.toggle('collapsed',stripCollapsed);
+}
+
+function renderStrip(){
+  const scrollEl=$('c-thumbstrip-scroll'),track=$('c-thumbstrip');
+  if(!scrollEl||!track)return;
+  track.style.width=(P.length*THUMB_STEP)+'px';
+  const viewW=scrollEl.clientWidth,scrollL=scrollEl.scrollLeft;
+  const lo=Math.max(0,Math.floor(scrollL/THUMB_STEP)-THUMB_BUFFER);
+  const hi=Math.min(P.length,Math.ceil((scrollL+viewW)/THUMB_STEP)+THUMB_BUFFER);
+  let html='';
+  for(let idx=lo;idx<hi;idx++){
+    const p=P[idx];
+    html+=`<div class="thumb${idx===i?' now':''}${p.thumbFailed?' failed':''}" style="left:${idx*THUMB_STEP}px" `+
+      `onmousedown="event.preventDefault();jumpTo(${idx})">`+
+      (p.thumbUrl?`<img src="${p.thumbUrl}" alt="">`:p.thumbFailed?`<span class="thumb-err">!</span>`:'')+
+      markHtml(p)+`</div>`;
+    if(!p.thumbUrl&&!p.thumbFailed)requestThumb(idx);
+  }
+  track.innerHTML=html;
+}
+
+function scrollStripIntoView(){
+  const scrollEl=$('c-thumbstrip-scroll');
+  if(!scrollEl){renderStrip();return;}
+  const left=i*THUMB_STEP,right=left+THUMB_W;
+  if(left<scrollEl.scrollLeft)scrollEl.scrollLeft=Math.max(0,left-40);
+  else if(right>scrollEl.scrollLeft+scrollEl.clientWidth)scrollEl.scrollLeft=right-scrollEl.clientWidth+40;
+  renderStrip();
+}
+
+function jumpTo(idx){
+  if(idx<0||idx>=P.length)return;
+  i=idx;mode='view';paint();
+}
+
+function chips(){
+  const p=P[i];
+  $('c-chips').innerHTML =
+    p.sp.map((s,n)=>`<button class="chip" onclick="drop('sp',${n})">${s}<span class="x">&times;</span></button>`).join('')+
+    p.nt.map((s,n)=>`<button class="chip n" onclick="drop('nt',${n})">${s}<span class="x">&times;</span></button>`).join('')+
+    `<input id="c-in" placeholder="${p.sp.length||p.nt.length?'another tag, or enter for next':'species or note — cu, nest, baby'}" autocomplete="off">`;
+  const inp=$('c-in');
+  inp.addEventListener('input',e=>suggest(e.target.value));
+  inp.focus();suggest('');
+}
+function drop(k,n){P[i][k].splice(n,1);chips();persistPhoto(i);}
+
+function suggest(q){
+  q=q.trim();const l=q.toLowerCase();
+  const match=(name,alt)=>{
+    const s=(name+' '+alt).toLowerCase();
+    return s.split(/[ -]/).some(w=>w.startsWith(l));
+  };
+  hits=[];
+  if(l){
+    SPECIES.filter(([c])=>match(c,'')).forEach(([c,sc])=>hits.push({k:'sp',v:c,sc}));
+    NOTES.filter(([c,a])=>match(c,a)).forEach(([c])=>hits.push({k:'nt',v:c}));
+    hits=hits.slice(0,4);
+    if(!hits.some(h=>h.v.toLowerCase()===l))
+      hits.push({k:'nt',v:q.charAt(0).toUpperCase()+q.slice(1),neu:true});
+  }
+  const p=P[i],any=p.sp.length||p.nt.length;
+  $('c-sugg').innerHTML =
+    hits.map((h,n)=>`<button onclick="add(${n})"><span class="n">${n+1}</span>${h.v}`+
+      (h.sc?` <span class="sci">${h.sc}</span>`:'')+
+      `<span class="kind">${h.neu?'new note':h.k==='sp'?'':'note'}</span></button>`).join('')+
+    `<button class="nextbtn" onclick="next()">${any?'Next photo':'Skip tagging'} &rarr;</button>`;
+}
+function add(n){
+  const h=hits[n];if(!h)return;
+  const p=P[i];
+  if(h.neu&&!NOTES.some(([c])=>c===h.v))NOTES.push([h.v,'']);
+  if(h.k==='sp'){if(!p.sp.includes(h.v)){p.sp.push(h.v);}sticky=h.v;}
+  else if(!p.nt.includes(h.v))p.nt.push(h.v);
+  chips();
+  persistPhoto(i);
+}
+
+function pick(n){cur=n;verdict(...VERDICTS[n]);}
+function step(d){
+  mode='view';
+  const j=i+d;
+  if(j<0||j>=P.length)return;
+  i=j;paint();
+}
+function verdict(v,g){
+  const p=P[i];
+  hist.push({idx:i,verdict:p.verdict,great:p.great,sp:[...p.sp],nt:[...p.nt]});
+  p.verdict=v;p.great=!!g;
+  if(v==='rej'){p.sp=[];p.nt=[];persistPhoto(i);return next();}
+  if(!p.sp.length&&sticky)p.sp=[sticky];
+  persistPhoto(i);
+  mode='tag';paint();
+}
+function next(){mode='view';i++;paint();}
+function undo(){
+  const h=hist.pop();if(!h)return;
+  if(h.batch){
+    h.batch.forEach(e=>{Object.assign(P[e.idx],{verdict:e.verdict,great:e.great,sp:e.sp,nt:e.nt});persistPhoto(e.idx);});
+    i=h.batch[0].idx;
+  }else{
+    i=h.idx;Object.assign(P[i],{verdict:h.verdict,great:h.great,sp:h.sp,nt:h.nt});
+    persistPhoto(i);
+  }
+  mode='view';
+  if(screen==='s-grid')renderGrid();else paint();
+}
+
+// ---- grid view: virtualized, Finder-style, SESSION-FLOW.md §4 ----
+const GRID_GAP=6;
+let gridSize=140,gridCursor=0,gridAnchor=0;
+
+function openGrid(){
+  gridCursor=i;gridAnchor=i;
+  go('s-grid');
+  renderGrid();
+  requestAnimationFrame(()=>{scrollGridIntoView();renderGrid();});
+}
+function closeGrid(){
+  go('s-cull');
+  paint(); // bulk discards made in the grid may have changed the current photo's verdict
+}
+
+function gridCols(){
+  const track=$('grid-track');
+  const w=track?track.clientWidth:0;
+  return Math.max(1,Math.floor((w+GRID_GAP)/(gridSize+GRID_GAP)));
+}
+
+function renderGrid(){
+  const el=$('grid-scroll'),track=$('grid-track');
+  if(!el||!track)return;
+  const cols=gridCols(),rows=Math.ceil(P.length/cols),rowH=gridSize+GRID_GAP;
+  track.style.height=(rows*rowH)+'px';
+  const scrollT=el.scrollTop,viewH=el.clientHeight,BUFFER=2;
+  const rowLo=Math.max(0,Math.floor(scrollT/rowH)-BUFFER);
+  const rowHi=Math.min(rows,Math.ceil((scrollT+viewH)/rowH)+BUFFER);
+  const lo=rowLo*cols,hi=Math.min(P.length,rowHi*cols);
+  const selLo=Math.min(gridAnchor,gridCursor),selHi=Math.max(gridAnchor,gridCursor);
+  let html='';
+  for(let idx=lo;idx<hi;idx++){
+    const p=P[idx],row=Math.floor(idx/cols),col=idx%cols;
+    const sel=idx>=selLo&&idx<=selHi,cur=idx===gridCursor;
+    html+=`<div class="gtile${cur?' cursor':''}${sel?' sel':''}${p.thumbFailed?' failed':''}" `+
+      `style="left:${col*(gridSize+GRID_GAP)}px;top:${row*rowH}px;width:${gridSize}px;height:${gridSize}px" `+
+      `onmousedown="event.preventDefault();gridClick(${idx},event.shiftKey)">`+
+      (p.thumbUrl?`<img src="${p.thumbUrl}" alt="">`:p.thumbFailed?`<span class="thumb-err">!</span>`:'')+
+      markHtml(p)+`</div>`;
+    if(!p.thumbUrl&&!p.thumbFailed)requestThumb(idx);
+  }
+  track.innerHTML=html;
+  updateGridSummary();
+  updateGridDiscardBtn();
+}
+
+function scrollGridIntoView(){
+  const el=$('grid-scroll');
+  if(!el)return;
+  const cols=gridCols(),rowH=gridSize+GRID_GAP;
+  const row=Math.floor(gridCursor/cols);
+  const top=row*rowH,bottom=top+rowH;
+  if(top<el.scrollTop)el.scrollTop=Math.max(0,top-40);
+  else if(bottom>el.scrollTop+el.clientHeight)el.scrollTop=bottom-el.clientHeight+40;
+}
+
+function gridClick(idx,shift){
+  if(shift){gridCursor=idx;renderGrid();return;}
+  jumpTo(idx);closeGrid();
+}
+
+function gridMove(dx,dy,extend){
+  const cols=gridCols();
+  let ni=gridCursor+dx+dy*cols;
+  ni=Math.max(0,Math.min(P.length-1,ni));
+  gridCursor=ni;
+  if(!extend)gridAnchor=ni;
+  renderGrid();
+  scrollGridIntoView();
+}
+
+function resizeGrid(delta){
+  gridSize=Math.max(80,Math.min(240,gridSize+delta));
+  renderGrid();
+}
+
+function bulkDiscard(indices){
+  if(!indices.length)return;
+  const batch=indices.map(idx=>({idx,verdict:P[idx].verdict,great:P[idx].great,sp:[...P[idx].sp],nt:[...P[idx].nt]}));
+  hist.push({batch});
+  indices.forEach(idx=>{const p=P[idx];p.verdict='rej';p.great=false;p.sp=[];p.nt=[];persistPhoto(idx);});
+}
+
+function discardGridSelection(){
+  const lo=Math.min(gridAnchor,gridCursor),hi=Math.max(gridAnchor,gridCursor);
+  const indices=[];
+  for(let idx=lo;idx<=hi;idx++)indices.push(idx);
+  bulkDiscard(indices);
+  gridAnchor=gridCursor;
+  renderGrid();
+}
+
+function updateGridSummary(){
+  const el=$('grid-summary');if(!el)return;
+  const reviewed=P.filter(p=>p.verdict).length;
+  const keptN=P.filter(p=>p.verdict==='keep').length;
+  const rejN=P.filter(p=>p.verdict==='rej').length;
+  el.textContent=`${reviewed} reviewed · ${keptN} kept · ${rejN} discarded · ${P.length-reviewed} remaining`;
+}
+function updateGridDiscardBtn(){
+  const el=$('grid-discard-btn');if(!el)return;
+  const n=Math.abs(gridCursor-gridAnchor)+1;
+  el.textContent=`Discard ${n} →`;
+}
+
+$('c-thumbstrip-scroll').addEventListener('scroll',()=>{if(screen==='s-cull')renderStrip();});
+$('grid-scroll').addEventListener('scroll',()=>{if(screen==='s-grid')renderGrid();});
+window.addEventListener('resize',()=>{
+  if(screen==='s-cull')renderStrip();
+  else if(screen==='s-grid')renderGrid();
+});
+
+// ---- review screen: a checkpoint, not a terminus (SPEC.md §6) ----
+// Nothing is written to disk until the user explicitly clicks "Write to
+// output folder" here. Three sub-states share the s-done screen: review
+// (stats + table, no write has happened), writing (progress + cancel),
+// written (real results, read back from disk, not a hypothetical preview).
+
+let doneState='review';
+let lastWriteResult=null;
+
+function showDoneState(s){
+  doneState=s;
+  document.querySelectorAll('.done-panel').forEach(el=>el.classList.toggle('on',el.id==='d-'+s));
+  document.querySelectorAll('.done-foot').forEach(el=>el.classList.toggle('on',el.id==='d-'+s+'-foot'));
+  $('d-start-over-btn').disabled=(s==='writing');
+}
+
+function finish(){
+  const k=kept(),sp=new Set();
+  k.forEach(p=>p.sp.forEach(s=>sp.add(s)));
+  $('d-kept').textContent=k.length;
+  $('d-rej').textContent=P.filter(p=>p.verdict==='rej').length;
+  $('d-great').textContent=k.filter(p=>p.great).length;
+  $('d-sp').textContent=sp.size;
+  $('d-un').textContent=k.filter(p=>!p.sp.length).length;
+  const tags=new Set();k.forEach(p=>{p.sp.forEach(s=>tags.add(s));p.nt.forEach(s=>tags.add(s));});
+  $('d-quick').innerHTML=['great','untagged',...tags].map(t=>
+    `<button onclick="document.getElementById('d-q').value='${t}';rows('${t}')">${t}</button>`).join('');
+  $('d-write-btn').disabled=k.length===0;
+  $('d-write-error').textContent='';
+  go('s-done');showDoneState('review');rows('');$('d-q').value='';
+}
+function rows(q){
+  q=q.trim().toLowerCase();
+  let k=kept();
+  if(q==='great')k=k.filter(p=>p.great);
+  else if(q==='untagged')k=k.filter(p=>!p.sp.length);
+  else if(q)k=k.filter(p=>[...p.sp,...p.nt].some(s=>s.toLowerCase().includes(q)));
+  $('d-rows').innerHTML=k.length?k.map(p=>
+    `<div class="row"><img src="${p.previewUrl||''}" alt=""><span class="f">${p.name}</span>
+     <span class="sp">${p.sp.length?p.sp.join(' &middot; '):'<span style="color:var(--faint)">untagged</span>'}</span>
+     <span class="nt">${p.nt.join(' &middot; ')}</span>
+     <span class="st">${p.great?'&#9733;':''}</span></div>`).join('')
+    :'<p class="empty">Nothing matches.</p>';
+}
+
+// "Back to culling" — the review screen must be a checkpoint, not a
+// terminus: verdicts made here are just as revisable as any other. Handles
+// both ways of reaching review: running off the end (i>=P.length) and an
+// explicit Finish click mid-session.
+function backToCulling(){
+  if(i>=P.length){
+    const firstUnreviewed=P.findIndex(p=>!p.verdict);
+    i=firstUnreviewed===-1?Math.max(0,P.length-1):firstUnreviewed;
+  }
+  mode='view';
+  go('s-cull');paint();
+}
+
+function startWrite(){
+  $('d-write-error').textContent='';
+  showDoneState('writing');
+  $('d-write-status').textContent=`Starting… 0 of ${kept().length}`;
+  $('d-write-prog').style.width='0%';
+  pywebview.api.start_write(destPath).then(started=>{
+    if(!started){
+      showDoneState('review');
+      $('d-write-error').textContent='A write is already in progress.';
+    }
+  });
+}
+function cancelWrite(){
+  $('d-write-status').textContent+=' — cancelling…';
+  pywebview.api.cancel_write();
+}
+function revealOutput(){
+  pywebview.api.reveal_in_finder(destPath);
+}
+
+// called from Python via evaluate_js while a write is running
+function onWriteProgress(done,total,stem){
+  $('d-write-prog').style.width=pct(done,total);
+  $('d-write-status').textContent=stem
+    ? `Writing ${stem} — ${done} of ${total}`
+    : `Finishing… ${done} of ${total}`;
+}
+
+function onWriteComplete(result){
+  lastWriteResult=result;
+  const rs=result.results;
+  const copied=rs.filter(r=>r.master_status==='copied'||r.master_status==='moved').length;
+  const skipped=rs.filter(r=>r.master_status==='skipped').length;
+  const xmpOk=rs.filter(r=>r.xmp_written).length;
+  const failures=rs.filter(r=>r.errors&&r.errors.length);
+  $('d-w-copied').textContent=copied;
+  $('d-w-skipped').textContent=skipped;
+  $('d-w-xmp').textContent=xmpOk;
+  $('d-w-failed').textContent=failures.length;
+  $('d-w-dest').textContent=destPath;
+  $('d-w-failures').innerHTML=failures.length
+    ? '<h3>Failed</h3>'+failures.map(r=>
+        `<div class="row"><span class="f">${r.stem}</span><span class="sp" style="color:var(--reject)">${r.errors.join('; ')}</span></div>`
+      ).join('')
+    : '';
+  $('d-w-summary').textContent=result.cancelled
+    ? `Cancelled after ${rs.length} of ${kept().length} files — nothing lost. Write again to finish the rest (already-copied files are skipped).`
+    : `Done — ${copied+skipped} of ${rs.length} files at the destination, ${xmpOk} sidecars written${failures.length?`, ${failures.length} failed`:''}.`;
+  $('d-reveal-btn').style.display=(copied+skipped)>0?'':'none';
+  $('d-write-again-btn').textContent=result.cancelled?'Resume write →':'Write again →';
+  showDoneState('written');
+  loadRealSidecar(rs);
+}
+
+function onWriteError(msg){
+  showDoneState('review');
+  $('d-write-error').textContent=`Couldn't write: ${msg}`;
+}
+
+// the real replacement for the old hypothetical "sidecar that would be
+// written" preview — reads back a sidecar that was actually written
+function loadRealSidecar(rs){
+  const written=rs.find(r=>r.xmp_written&&r.xmp_path);
+  if(!written){$('d-xmp').textContent='No sidecars were written.';return;}
+  $('d-xmp').textContent=`Reading back ${written.stem}.xmp…`;
+  pywebview.api.read_sidecar(written.xmp_path).then(res=>{
+    if(!res.ok){$('d-xmp').textContent=`${written.stem}.xmp\n\ncould not read it back: ${res.reason}`;return;}
+    const tags=(res.hierarchical_subject||[]).map(t=>'  '+t).join('\n');
+    $('d-xmp').textContent=`${written.stem}.xmp\n\n${tags}\n\n  xmp:Rating   ${res.rating||0}`;
+  });
+}
+
+function reset(){
+  P=[];i=0;hist=[];sticky=null;mode='view';
+  const pick=$('pick');if(pick)pick.value='';
+  go('s-start');
+}
+$('d-q').addEventListener('input',e=>rows(e.target.value));
+
+addEventListener('keydown',e=>{
+  if(screen==='s-grid'){
+    if(e.key==='ArrowLeft'){e.preventDefault();gridMove(-1,0,e.shiftKey);}
+    else if(e.key==='ArrowRight'){e.preventDefault();gridMove(1,0,e.shiftKey);}
+    else if(e.key==='ArrowUp'){e.preventDefault();gridMove(0,-1,e.shiftKey);}
+    else if(e.key==='ArrowDown'){e.preventDefault();gridMove(0,1,e.shiftKey);}
+    else if(e.key==='Enter'){e.preventDefault();jumpTo(gridCursor);closeGrid();}
+    else if(e.key==='Escape'||e.key==='Tab'){e.preventDefault();closeGrid();}
+    else if(e.key==='x'||e.key==='X'){e.preventDefault();discardGridSelection();}
+    else if(e.key==='+'||e.key==='='){e.preventDefault();resizeGrid(20);}
+    else if(e.key==='-'){e.preventDefault();resizeGrid(-20);}
+    else if(e.key==='u'||e.key==='U'){e.preventDefault();undo();}
+    return;
+  }
+  if(screen!=='s-cull')return;
+  if(mode==='view'){
+    if(e.key===' '){e.preventDefault();pick(0);}
+    else if(e.key==='g'||e.key==='G'){e.preventDefault();pick(1);}
+    else if(e.key==='x'||e.key==='X'){e.preventDefault();pick(2);}
+    else if(e.key==='ArrowLeft'){e.preventDefault();cur=Math.max(0,cur-1);paint();}
+    else if(e.key==='ArrowRight'){e.preventDefault();cur=Math.min(2,cur+1);paint();}
+    else if(e.key==='ArrowUp'){e.preventDefault();step(-1);}
+    else if(e.key==='ArrowDown'){e.preventDefault();step(1);}
+    else if(e.key==='Enter'){e.preventDefault();pick(cur);}
+    else if(e.key==='u'||e.key==='U'){e.preventDefault();undo();}
+    else if(e.key==='f'||e.key==='F'){e.preventDefault();finish();}
+    else if(e.key==='Tab'){e.preventDefault();openGrid();}
+    else if(e.key==='s'||e.key==='S'){e.preventDefault();toggleStrip();}
+    return;
+  }
+  const inp=$('c-in'),empty=!inp||!inp.value.trim();
+  if(e.key==='ArrowUp'){e.preventDefault();step(-1);}
+  else if(e.key==='ArrowDown'){e.preventDefault();step(1);}
+  else if(e.key>='1'&&e.key<='5'&&hits.length>=+e.key){e.preventDefault();add(+e.key-1);}
+  else if(e.key==='Enter'){e.preventDefault();if(!empty&&hits.length)add(0);else next();}
+  else if(e.key==='Backspace'&&empty){
+    const p=P[i];
+    if(p.nt.length){e.preventDefault();drop('nt',p.nt.length-1);}
+    else if(p.sp.length){e.preventDefault();drop('sp',p.sp.length-1);}
+  }
+  else if(e.key==='Escape'){e.preventDefault();next();}
+});
+</script>
+</body>
+</html>

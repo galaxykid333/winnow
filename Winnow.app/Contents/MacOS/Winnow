@@ -1,0 +1,24 @@
+#!/bin/bash
+# Launcher for the Winnow.app bundle. Resolves the project directory relative
+# to this script so the whole winnow/ folder can be moved or renamed without
+# breaking the app.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PYTHON_BIN="/opt/anaconda3/bin/python3"
+LOG_FILE="$PROJECT_DIR/winnow.log"
+
+cd "$PROJECT_DIR" || exit 1
+
+if [ ! -x "$PYTHON_BIN" ]; then
+    PYTHON_BIN="$(command -v python3)"
+fi
+
+"$PYTHON_BIN" main.py >"$LOG_FILE" 2>&1
+STATUS=$?
+
+if [ $STATUS -ne 0 ]; then
+    osascript -e 'display alert "Winnow failed to start" message "Check winnow.log in the app folder for details." as critical' >/dev/null 2>&1
+fi
+
+exit $STATUS

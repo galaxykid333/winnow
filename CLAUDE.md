@@ -4,8 +4,10 @@ Desktop app (macOS) for culling and tagging bird photographs. pywebview shell +
 Python backend + vanilla HTML/CSS/JS front-end. Single user.
 
 Full build spec: `SPEC.md`. Read it before starting a new build step.
+Session flow and navigation: `SESSION-FLOW.md` — supersedes SPEC.md §5–6 on
+the start screen and cull-screen navigation.
 Validated interaction design: `winnow-prototype.html` — reproduce its behaviour,
-don't reinvent it.
+don't reinvent it. Its dot strip and single-folder start screen are superseded.
 
 ## Hard constraints
 
@@ -21,7 +23,10 @@ constraints, not preferences.
 - Nothing is ever deleted. Discards are left in place or copied elsewhere.
   Undo always available.
 - A new feature must not add a control to the cull screen. If it would, it goes
-  on another screen or doesn't ship.
+  on another screen or doesn't ship. The thumbnail strip is the single
+  exception, because it reports state rather than offering controls.
+- Bulk actions are discard-only. Never bulk keep, never bulk tag — keeping is
+  what triggers tagging, and tagging is the point of the app.
 
 ## Do not build yet
 
