@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Winnow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#131519; --surface:#1a1d22; --surface2:#22262c; --line:#2c313a;
+  --ink:#e9e7e2; --muted:#8a9099; --faint:#5b616a;
+  --keep:#8aa882; --great:#d2a63f; --reject:#b06b60; --note:#7d95a6;
+  --sans:'Instrument Sans',system-ui,sans-serif;
+  --serif:'Instrument Serif',Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit;background:none;border:0;outline:0}
+.sci{font-family:var(--serif);font-style:italic;color:var(--muted)}
+.screen{height:100vh;display:none;flex-direction:column}
+.screen.on{display:flex}
+
+.bar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;flex:0 0 auto;gap:20px}
+.bar .site{font-size:14px;color:var(--muted)}
+.bar .count{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rule{height:1px;background:var(--line);position:relative;flex:0 0 auto}
+.rule i{position:absolute;left:0;top:0;height:1px;background:var(--keep);transition:width .18s ease}
+
+.stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;padding:8px 28px;min-height:0;position:relative}
+.stage img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.filmstrip{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);display:flex;gap:4px}
+.filmstrip span{width:5px;height:5px;border-radius:50%;background:var(--line)}
+.filmstrip span.k{background:var(--keep)} .filmstrip span.g{background:var(--great)}
+.filmstrip span.r{background:var(--reject)} .filmstrip span.now{transform:scale(1.7)}
+
+.verdicts{flex:0 0 auto;display:flex;gap:10px;padding:14px 28px 0}
+.vb{flex:1;border:1px solid var(--line);border-radius:4px;padding:14px 10px;text-align:center;
+   transition:border-color .14s,background .14s,color .14s}
+.vb b{display:block;font-weight:400;font-size:15px}
+.vb span{display:block;font-size:11px;color:var(--faint);margin-top:3px;letter-spacing:.06em;text-transform:uppercase}
+.vb:hover{border-color:var(--muted);background:var(--surface)}
+.vb.keep.on{border-color:var(--keep);color:var(--keep);background:rgba(138,168,130,.1)}
+.vb.great.on{border-color:var(--great);color:var(--great);background:rgba(210,166,63,.1)}
+.vb.rej.on{border-color:var(--reject);color:var(--reject);background:rgba(176,107,96,.1)}
+.vb.on span{color:inherit;opacity:.7}
+.vb.cursor{box-shadow:0 0 0 1px var(--ink)}
+.finish{border:1px solid var(--line);border-radius:3px;padding:5px 13px;font-size:13px;color:var(--muted)}
+.finish:hover{border-color:var(--muted);color:var(--ink)}
+
+.tagpane{flex:0 0 auto;padding:14px 28px 0;display:none}
+.tagpane.on{display:block}
+.chips{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-height:36px;
+      border-bottom:1px solid var(--line);padding-bottom:8px}
+.chip{border:1px solid var(--keep);color:var(--keep);border-radius:3px;padding:5px 11px;font-size:14px;display:flex;gap:9px;align-items:baseline}
+.chip.n{border-color:var(--note);color:var(--note)}
+.chip .x{color:var(--faint);font-size:12px}
+.chips input{flex:1;min-width:210px;padding:6px 0;font-size:16px}
+.sugg{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;min-height:32px;align-items:center}
+.sugg button{border:1px solid var(--line);padding:6px 12px;border-radius:3px;font-size:13px;display:flex;gap:8px;align-items:baseline}
+.sugg button:hover{border-color:var(--muted);background:var(--surface)}
+.sugg .n{font-size:11px;color:var(--faint);width:11px}
+.sugg .kind{font-size:11px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase}
+.sugg .nextbtn{margin-left:auto;border-color:var(--keep);color:var(--keep)}
+.sugg .nextbtn:hover{background:rgba(138,168,130,.1);border-color:var(--keep)}
+
+.keys{flex:0 0 auto;display:flex;gap:22px;padding:14px 28px 18px;font-size:12px;color:var(--faint);flex-wrap:wrap}
+.keys b{color:var(--muted);font-weight:500;margin-right:6px}
+
+.mid{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:40px;text-align:center;overflow-y:auto}
+h1{font-family:var(--serif);font-style:italic;font-size:44px;font-weight:400}
+.lede{color:var(--muted);max-width:47ch}
+.btn{border:1px solid var(--line);padding:11px 22px;border-radius:3px;transition:border-color .15s,background .15s}
+.btn:hover{border-color:var(--muted);background:var(--surface)}
+.btn.go{border-color:var(--keep);color:var(--keep)}
+.btn.go:hover{background:rgba(138,168,130,.09)}
+
+.panel{flex:1 1 auto;overflow-y:auto;padding:0 28px 28px;max-width:880px;width:100%;margin:0 auto}
+.stat{display:flex;gap:40px;padding:20px 0 26px;border-bottom:1px solid var(--line);margin-bottom:24px;flex-wrap:wrap}
+.stat div span{display:block;font-size:12px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px}
+.stat div b{font-size:28px;font-weight:400;font-variant-numeric:tabular-nums}
+.search{display:flex;border:1px solid var(--line);border-radius:3px;padding:11px 15px;margin-bottom:14px}
+.search input{flex:1;font-size:15px}
+.quick{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.quick button{border:1px solid var(--line);border-radius:3px;padding:5px 12px;font-size:12px;color:var(--muted)}
+.quick button:hover{border-color:var(--muted)}
+.row{display:flex;align-items:center;gap:14px;padding:9px 0;border-bottom:1px solid var(--surface2);font-size:14px}
+.row img{width:74px;height:50px;object-fit:cover;border-radius:2px;background:var(--surface);flex:0 0 auto}
+.row .f{color:var(--faint);font-size:12px;min-width:112px;font-variant-numeric:tabular-nums}
+.row .sp{flex:1}
+.row .nt{color:var(--note);font-size:12px}
+.row .st{color:var(--great);font-size:12px;min-width:12px}
+.xmp{background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:16px 18px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.75;color:var(--muted);white-space:pre-wrap}
+h3{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin:30px 0 12px}
+.foot{flex:0 0 auto;display:flex;gap:12px;padding:16px 28px;border-top:1px solid var(--line);flex-wrap:wrap}
+.empty{color:var(--faint);padding:26px 0;font-size:14px}
+</style>
+</head>
+<body>
+
+<section class="screen on" id="s-start">
+  <div class="mid">
+    <h1>Winnow</h1>
+    <p class="lede">Sort and tag in one pass. Keep a photo and the tag field opens straight away; the last species carries over, so a run of the same bird is two keys each. Mouse or keyboard, both work.</p>
+    <input type="file" id="pick" accept="image/*" multiple hidden>
+    <button class="btn go" onclick="document.getElementById('pick').click()">Choose photos</button>
+    <p class="lede" style="font-size:13px;color:var(--faint)">Nothing leaves your machine — try it with wifi off. Export JPEGs from a real session; raw won't preview in a browser.</p>
+  </div>
+</section>
+
+<section class="screen" id="s-cull">
+  <div class="bar"><span class="site" id="c-site"></span>
+    <span class="count"><span id="c-count"></span>
+      <button class="finish" style="margin-left:16px" onclick="finish()">Finish</button></span></div>
+  <div class="rule"><i id="c-prog"></i></div>
+  <div class="stage"><img id="c-img" alt=""><div class="filmstrip" id="c-strip"></div></div>
+  <div class="verdicts">
+    <button class="vb keep" id="vb-keep" onclick="pick(0)"><b>Keep</b><span>space</span></button>
+    <button class="vb great" id="vb-great" onclick="pick(1)"><b>Keep &amp; mark great</b><span>g</span></button>
+    <button class="vb rej" id="vb-rej" onclick="pick(2)"><b>Discard</b><span>x</span></button>
+  </div>
+  <div class="tagpane" id="c-pane">
+    <div class="chips" id="c-chips"></div>
+    <div class="sugg" id="c-sugg"></div>
+  </div>
+  <div class="keys" id="c-keys"></div>
+</section>
+
+<section class="screen" id="s-done">
+  <div class="bar"><span class="site">Session output</span>
+    <span class="count"><button class="btn" style="padding:5px 14px;font-size:13px" onclick="reset()">Start over</button></span></div>
+  <div class="rule"><i style="width:100%"></i></div>
+  <div class="panel">
+    <div class="stat">
+      <div><span>Kept</span><b id="d-kept">0</b></div>
+      <div><span>Discarded</span><b id="d-rej">0</b></div>
+      <div><span>Great</span><b id="d-great">0</b></div>
+      <div><span>Species</span><b id="d-sp">0</b></div>
+      <div><span>Untagged</span><b id="d-un">0</b></div>
+    </div>
+    <div class="search"><input id="d-q" placeholder="dunnock · nesting · great · untagged" autocomplete="off"></div>
+    <div class="quick" id="d-quick"></div>
+    <div id="d-rows"></div>
+    <h3>Sidecar that would be written</h3>
+    <div class="xmp" id="d-xmp"></div>
+  </div>
+  <div class="foot">
+    <button class="btn" onclick="dl('json')">Download tags as JSON</button>
+    <button class="btn" onclick="dl('sh')">Download exiftool script</button>
+  </div>
+</section>
+
+<script>
+const SPECIES=[["Dunnock","Prunella modularis"],["Robin","Erithacus rubecula"],["Wren","Troglodytes troglodytes"],["Blackbird","Turdus merula"],["Song thrush","Turdus philomelos"],["Mistle thrush","Turdus viscivorus"],["Redwing","Turdus iliacus"],["Fieldfare","Turdus pilaris"],["Blue tit","Cyanistes caeruleus"],["Great tit","Parus major"],["Coal tit","Periparus ater"],["Marsh tit","Poecile palustris"],["Willow tit","Poecile montanus"],["Crested tit","Lophophanes cristatus"],["Long-tailed tit","Aegithalos caudatus"],["Chaffinch","Fringilla coelebs"],["Brambling","Fringilla montifringilla"],["Goldfinch","Carduelis carduelis"],["Greenfinch","Chloris chloris"],["Linnet","Linaria cannabina"],["Twite","Linaria flavirostris"],["Lesser redpoll","Acanthis cabaret"],["Siskin","Spinus spinus"],["Bullfinch","Pyrrhula pyrrhula"],["Hawfinch","Coccothraustes coccothraustes"],["Crossbill","Loxia curvirostra"],["Yellowhammer","Emberiza citrinella"],["Reed bunting","Emberiza schoeniclus"],["Corn bunting","Emberiza calandra"],["Snow bunting","Plectrophenax nivalis"],["House sparrow","Passer domesticus"],["Tree sparrow","Passer montanus"],["Starling","Sturnus vulgaris"],["Pied wagtail","Motacilla alba"],["Grey wagtail","Motacilla cinerea"],["Yellow wagtail","Motacilla flava"],["Meadow pipit","Anthus pratensis"],["Rock pipit","Anthus petrosus"],["Tree pipit","Anthus trivialis"],["Skylark","Alauda arvensis"],["Swallow","Hirundo rustica"],["House martin","Delichon urbicum"],["Sand martin","Riparia riparia"],["Swift","Apus apus"],["Chiffchaff","Phylloscopus collybita"],["Willow warbler","Phylloscopus trochilus"],["Blackcap","Sylvia atricapilla"],["Garden warbler","Sylvia borin"],["Whitethroat","Curruca communis"],["Lesser whitethroat","Curruca curruca"],["Sedge warbler","Acrocephalus schoenobaenus"],["Reed warbler","Acrocephalus scirpaceus"],["Cetti's warbler","Cettia cetti"],["Goldcrest","Regulus regulus"],["Firecrest","Regulus ignicapilla"],["Spotted flycatcher","Muscicapa striata"],["Pied flycatcher","Ficedula hypoleuca"],["Redstart","Phoenicurus phoenicurus"],["Black redstart","Phoenicurus ochruros"],["Stonechat","Saxicola rubicola"],["Whinchat","Saxicola rubetra"],["Wheatear","Oenanthe oenanthe"],["Nuthatch","Sitta europaea"],["Treecreeper","Certhia familiaris"],["Great spotted woodpecker","Dendrocopos major"],["Green woodpecker","Picus viridis"],["Lesser spotted woodpecker","Dryobates minor"],["Kingfisher","Alcedo atthis"],["Cuckoo","Cuculus canorus"],["Magpie","Pica pica"],["Jay","Garrulus glandarius"],["Jackdaw","Corvus monedula"],["Rook","Corvus frugilegus"],["Carrion crow","Corvus corone"],["Raven","Corvus corax"],["Curlew","Numenius arquata"],["Whimbrel","Numenius phaeopus"],["Bar-tailed godwit","Limosa lapponica"],["Black-tailed godwit","Limosa limosa"],["Oystercatcher","Haematopus ostralegus"],["Avocet","Recurvirostra avosetta"],["Lapwing","Vanellus vanellus"],["Golden plover","Pluvialis apricaria"],["Grey plover","Pluvialis squatarola"],["Ringed plover","Charadrius hiaticula"],["Little ringed plover","Charadrius dubius"],["Knot","Calidris canutus"],["Sanderling","Calidris alba"],["Dunlin","Calidris alpina"],["Curlew sandpiper","Calidris ferruginea"],["Little stint","Calidris minuta"],["Purple sandpiper","Calidris maritima"],["Turnstone","Arenaria interpres"],["Redshank","Tringa totanus"],["Spotted redshank","Tringa erythropus"],["Greenshank","Tringa nebularia"],["Green sandpiper","Tringa ochropus"],["Wood sandpiper","Tringa glareola"],["Common sandpiper","Actitis hypoleucos"],["Snipe","Gallinago gallinago"],["Jack snipe","Lymnocryptes minimus"],["Woodcock","Scolopax rusticola"],["Ruff","Calidris pugnax"],["Grey heron","Ardea cinerea"],["Little egret","Egretta garzetta"],["Great white egret","Ardea alba"],["Spoonbill","Platalea leucorodia"],["Bittern","Botaurus stellaris"],["Mute swan","Cygnus olor"],["Whooper swan","Cygnus cygnus"],["Bewick's swan","Cygnus columbianus"],["Greylag goose","Anser anser"],["Pink-footed goose","Anser brachyrhynchus"],["Brent goose","Branta bernicla"],["Barnacle goose","Branta leucopsis"],["Canada goose","Branta canadensis"],["Shelduck","Tadorna tadorna"],["Mallard","Anas platyrhynchos"],["Teal","Anas crecca"],["Wigeon","Mareca penelope"],["Gadwall","Mareca strepera"],["Pintail","Anas acuta"],["Shoveler","Spatula clypeata"],["Tufted duck","Aythya fuligula"],["Pochard","Aythya ferina"],["Scaup","Aythya marila"],["Eider","Somateria mollissima"],["Common scoter","Melanitta nigra"],["Velvet scoter","Melanitta fusca"],["Goldeneye","Bucephala clangula"],["Goosander","Mergus merganser"],["Red-breasted merganser","Mergus serrator"],["Little grebe","Tachybaptus ruficollis"],["Great crested grebe","Podiceps cristatus"],["Slavonian grebe","Podiceps auritus"],["Black-necked grebe","Podiceps nigricollis"],["Cormorant","Phalacrocorax carbo"],["Shag","Gulosus aristotelis"],["Gannet","Morus bassanus"],["Fulmar","Fulmarus glacialis"],["Manx shearwater","Puffinus puffinus"],["Puffin","Fratercula arctica"],["Guillemot","Uria aalge"],["Razorbill","Alca torda"],["Kittiwake","Rissa tridactyla"],["Black-headed gull","Chroicocephalus ridibundus"],["Common gull","Larus canus"],["Herring gull","Larus argentatus"],["Lesser black-backed gull","Larus fuscus"],["Great black-backed gull","Larus marinus"],["Mediterranean gull","Ichthyaetus melanocephalus"],["Little gull","Hydrocoloeus minutus"],["Glaucous gull","Larus hyperboreus"],["Iceland gull","Larus glaucoides"],["Sandwich tern","Thalasseus sandvicensis"],["Common tern","Sterna hirundo"],["Arctic tern","Sterna paradisaea"],["Little tern","Sternula albifrons"],["Arctic skua","Stercorarius parasiticus"],["Great skua","Stercorarius skua"],["Kestrel","Falco tinnunculus"],["Peregrine","Falco peregrinus"],["Merlin","Falco columbarius"],["Hobby","Falco subbuteo"],["Sparrowhawk","Accipiter nisus"],["Goshawk","Accipiter gentilis"],["Buzzard","Buteo buteo"],["Red kite","Milvus milvus"],["Marsh harrier","Circus aeruginosus"],["Hen harrier","Circus cyaneus"],["White-tailed eagle","Haliaeetus albicilla"],["Golden eagle","Aquila chrysaetos"],["Osprey","Pandion haliaetus"],["Barn owl","Tyto alba"],["Tawny owl","Strix aluco"],["Little owl","Athene noctua"],["Short-eared owl","Asio flammeus"],["Long-eared owl","Asio otus"],["Red grouse","Lagopus lagopus"],["Rock ptarmigan","Lagopus muta"],["Black grouse","Lyrurus tetrix"],["Pheasant","Phasianus colchicus"],["Grey partridge","Perdix perdix"],["Red-legged partridge","Alectoris rufa"],["Moorhen","Gallinula chloropus"],["Coot","Fulica atra"],["Water rail","Rallus aquaticus"],["Woodpigeon","Columba palumbus"],["Stock dove","Columba oenas"],["Collared dove","Streptopelia decaocto"],["Dipper","Cinclus cinclus"],["Waxwing","Bombycilla garrulus"]];
+
+let NOTES=[["Multiple birds","several flock group"],["Juvenile","baby chick young immature"],["Nesting","nest breeding"],["In flight","flying bif wings"],["Feeding","eating foraging prey"],["Displaying","display courtship"],["Perched",""],["Swimming","water"],["Pair","two"],["Flock","many"],["Calling","song singing"],["Ringed bird","ring colour-ring"],["Habitat","landscape scene"],["Portrait","close-up"]];
+
+const VERDICTS=[['keep',false],['keep',true],['rej',false]];
+let P=[],i=0,mode='view',sticky=null,hist=[],hits=[],screen='s-start',cur=0;
+const $=id=>document.getElementById(id);
+
+$('pick').addEventListener('change',e=>{
+  const f=[...e.target.files].filter(x=>x.type.startsWith('image/'));
+  if(!f.length)return;
+  f.sort((a,b)=>a.name.localeCompare(b.name));
+  P=f.map(file=>({file,name:file.name,url:URL.createObjectURL(file),
+    date:new Date(file.lastModified),verdict:null,great:false,sp:[],nt:[]}));
+  i=0;hist=[];sticky=null;mode='view';go('s-cull');paint();
+});
+function go(id){screen=id;document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));}
+const pct=(a,b)=>b?Math.round(a/b*100)+'%':'0%';
+const kept=()=>P.filter(p=>p.verdict==='keep');
+
+function paint(){
+  if(i>=P.length)return finish();
+  const p=P[i];
+  $('c-img').src=p.url;
+  $('c-site').textContent=p.date.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  $('c-count').textContent=`${i+1} of ${P.length}`;
+  $('c-prog').style.width=pct(i,P.length);
+  const B=[$('vb-keep'),$('vb-great'),$('vb-rej')];
+  B[0].classList.toggle('on',p.verdict==='keep'&&!p.great);
+  B[1].classList.toggle('on',p.verdict==='keep'&&p.great);
+  B[2].classList.toggle('on',p.verdict==='rej');
+  B.forEach((b,n)=>b.classList.toggle('cursor',mode==='view'&&n===cur));
+  strip();
+  $('c-pane').classList.toggle('on',mode==='tag');
+  if(mode==='tag')chips();
+  $('c-keys').innerHTML = mode==='view'
+    ? `<span><b>&darr; &uarr;</b>photo</span><span><b>&larr; &rarr;</b>choose</span><span><b>enter</b>confirm</span>
+       <span><b>space g x</b>direct</span><span><b>u</b>undo</span><span><b>f</b>finish</span>`
+    : `<span><b>type</b>species or note</span><span><b>1-5</b>add</span><span><b>enter</b>add, or next if empty</span>
+       <span><b>backspace</b>remove last</span><span><b>esc</b>next, untagged</span>`;
+}
+function strip(){
+  const lo=Math.max(0,i-14),hi=Math.min(P.length,i+15);
+  $('c-strip').innerHTML=P.slice(lo,hi).map((p,n)=>{
+    const c=p.great?'g':p.verdict==='keep'?'k':p.verdict==='rej'?'r':'';
+    return `<span class="${c}${lo+n===i?' now':''}"></span>`;}).join('');
+}
+
+function chips(){
+  const p=P[i];
+  $('c-chips').innerHTML =
+    p.sp.map((s,n)=>`<button class="chip" onclick="drop('sp',${n})">${s}<span class="x">&times;</span></button>`).join('')+
+    p.nt.map((s,n)=>`<button class="chip n" onclick="drop('nt',${n})">${s}<span class="x">&times;</span></button>`).join('')+
+    `<input id="c-in" placeholder="${p.sp.length||p.nt.length?'another tag, or enter for next':'species or note — cu, nest, baby'}" autocomplete="off">`;
+  const inp=$('c-in');
+  inp.addEventListener('input',e=>suggest(e.target.value));
+  inp.focus();suggest('');
+}
+function drop(k,n){P[i][k].splice(n,1);chips();}
+
+function suggest(q){
+  q=q.trim();const l=q.toLowerCase();
+  const match=(name,alt)=>{
+    const s=(name+' '+alt).toLowerCase();
+    return s.split(/[ -]/).some(w=>w.startsWith(l));
+  };
+  hits=[];
+  if(l){
+    SPECIES.filter(([c])=>match(c,'')).forEach(([c,sc])=>hits.push({k:'sp',v:c,sc}));
+    NOTES.filter(([c,a])=>match(c,a)).forEach(([c])=>hits.push({k:'nt',v:c}));
+    hits=hits.slice(0,4);
+    if(!hits.some(h=>h.v.toLowerCase()===l))
+      hits.push({k:'nt',v:q.charAt(0).toUpperCase()+q.slice(1),neu:true});
+  }
+  const p=P[i],any=p.sp.length||p.nt.length;
+  $('c-sugg').innerHTML =
+    hits.map((h,n)=>`<button onclick="add(${n})"><span class="n">${n+1}</span>${h.v}`+
+      (h.sc?` <span class="sci">${h.sc}</span>`:'')+
+      `<span class="kind">${h.neu?'new note':h.k==='sp'?'':'note'}</span></button>`).join('')+
+    `<button class="nextbtn" onclick="next()">${any?'Next photo':'Skip tagging'} &rarr;</button>`;
+}
+function add(n){
+  const h=hits[n];if(!h)return;
+  const p=P[i];
+  if(h.neu&&!NOTES.some(([c])=>c===h.v))NOTES.push([h.v,'']);
+  if(h.k==='sp'){if(!p.sp.includes(h.v)){p.sp.push(h.v);}sticky=h.v;}
+  else if(!p.nt.includes(h.v))p.nt.push(h.v);
+  chips();
+}
+
+function pick(n){cur=n;verdict(...VERDICTS[n]);}
+function step(d){
+  mode='view';
+  const j=i+d;
+  if(j<0||j>=P.length)return;
+  i=j;paint();
+}
+function verdict(v,g){
+  const p=P[i];
+  hist.push({idx:i,verdict:p.verdict,great:p.great,sp:[...p.sp],nt:[...p.nt]});
+  p.verdict=v;p.great=!!g;
+  if(v==='rej'){p.sp=[];p.nt=[];return next();}
+  if(!p.sp.length&&sticky)p.sp=[sticky];
+  mode='tag';paint();
+}
+function next(){mode='view';i++;paint();}
+function undo(){
+  const h=hist.pop();if(!h)return;
+  i=h.idx;Object.assign(P[i],{verdict:h.verdict,great:h.great,sp:h.sp,nt:h.nt});
+  mode='view';paint();
+}
+
+function finish(){
+  const k=kept(),sp=new Set();
+  k.forEach(p=>p.sp.forEach(s=>sp.add(s)));
+  $('d-kept').textContent=k.length;
+  $('d-rej').textContent=P.filter(p=>p.verdict==='rej').length;
+  $('d-great').textContent=k.filter(p=>p.great).length;
+  $('d-sp').textContent=sp.size;
+  $('d-un').textContent=k.filter(p=>!p.sp.length).length;
+  const tags=new Set();k.forEach(p=>{p.sp.forEach(s=>tags.add(s));p.nt.forEach(s=>tags.add(s));});
+  $('d-quick').innerHTML=['great','untagged',...tags].map(t=>
+    `<button onclick="document.getElementById('d-q').value='${t}';rows('${t}')">${t}</button>`).join('');
+  go('s-done');rows('');xmp();$('d-q').value='';
+}
+function rows(q){
+  q=q.trim().toLowerCase();
+  let k=kept();
+  if(q==='great')k=k.filter(p=>p.great);
+  else if(q==='untagged')k=k.filter(p=>!p.sp.length);
+  else if(q)k=k.filter(p=>[...p.sp,...p.nt].some(s=>s.toLowerCase().includes(q)));
+  $('d-rows').innerHTML=k.length?k.map(p=>
+    `<div class="row"><img src="${p.url}" alt=""><span class="f">${p.name}</span>
+     <span class="sp">${p.sp.length?p.sp.join(' &middot; '):'<span style="color:var(--faint)">untagged</span>'}</span>
+     <span class="nt">${p.nt.join(' &middot; ')}</span>
+     <span class="st">${p.great?'&#9733;':''}</span></div>`).join('')
+    :'<p class="empty">Nothing matches.</p>';
+}
+function xmp(){
+  const k=kept(),p=k.find(x=>x.sp.length||x.nt.length)||k[0];
+  $('d-xmp').textContent = p
+    ? `${p.name.replace(/\.[^.]+$/,'')}.xmp\n\n`+
+      [...p.sp.map(s=>`  Bird|${s}`),...p.nt.map(s=>`  Note|${s}`)].join('\n')+
+      `\n  Status|Confirmed\n\n  xmp:Rating   ${p.great?5:0}\n  DateTimeOriginal   ${p.date.toISOString().slice(0,19).replace('T',' ')}`
+    : 'No keepers.';
+}
+function dl(kind){
+  const k=kept();let body,name,type;
+  if(kind==='json'){
+    body=JSON.stringify(k.map(p=>({file:p.name,species:p.sp,notes:p.nt,
+      rating:p.great?5:0,taken:p.date.toISOString()})),null,2);
+    name='winnow-tags.json';type='application/json';
+  }else{
+    body='#!/bin/sh\n# Run inside the folder holding these photos.\n\n'+
+      k.map(p=>'exiftool -overwrite_original'+
+        p.sp.map(s=>` -HierarchicalSubject+="Bird|${s}"`).join('')+
+        p.nt.map(s=>` -HierarchicalSubject+="Note|${s}"`).join('')+
+        ` -Rating=${p.great?5:0} "${p.name}"`).join('\n')+'\n';
+    name='write-tags.sh';type='text/plain';
+  }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([body],{type}));a.download=name;a.click();
+}
+function reset(){P=[];i=0;hist=[];sticky=null;mode='view';$('pick').value='';go('s-start');}
+$('d-q').addEventListener('input',e=>rows(e.target.value));
+
+addEventListener('keydown',e=>{
+  if(screen!=='s-cull')return;
+  if(mode==='view'){
+    if(e.key===' '){e.preventDefault();pick(0);}
+    else if(e.key==='g'||e.key==='G'){e.preventDefault();pick(1);}
+    else if(e.key==='x'||e.key==='X'){e.preventDefault();pick(2);}
+    else if(e.key==='ArrowLeft'){e.preventDefault();cur=Math.max(0,cur-1);paint();}
+    else if(e.key==='ArrowRight'){e.preventDefault();cur=Math.min(2,cur+1);paint();}
+    else if(e.key==='ArrowUp'){e.preventDefault();step(-1);}
+    else if(e.key==='ArrowDown'){e.preventDefault();step(1);}
+    else if(e.key==='Enter'){e.preventDefault();pick(cur);}
+    else if(e.key==='u'||e.key==='U'){e.preventDefault();undo();}
+    else if(e.key==='f'||e.key==='F'){e.preventDefault();finish();}
+    return;
+  }
+  const inp=$('c-in'),empty=!inp||!inp.value.trim();
+  if(e.key==='ArrowUp'){e.preventDefault();step(-1);}
+  else if(e.key==='ArrowDown'){e.preventDefault();step(1);}
+  else if(e.key>='1'&&e.key<='5'&&hits.length>=+e.key){e.preventDefault();add(+e.key-1);}
+  else if(e.key==='Enter'){e.preventDefault();if(!empty&&hits.length)add(0);else next();}
+  else if(e.key==='Backspace'&&empty){
+    const p=P[i];
+    if(p.nt.length){e.preventDefault();drop('nt',p.nt.length-1);}
+    else if(p.sp.length){e.preventDefault();drop('sp',p.sp.length-1);}
+  }
+  else if(e.key==='Escape'){e.preventDefault();next();}
+});
+</script>
+</body>
+</html>
