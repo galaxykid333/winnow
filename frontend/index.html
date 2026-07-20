@@ -758,7 +758,7 @@ function prefetchAround(){
 // or confirmed-absent-so-preview-is-final) has actually finished loading.
 let zoomMode='fit',zoomScale=1,zoomMultiplier=1,lastZoomPaintIndex=-1;
 let fullImageUrl=null,fullImageChecked=false,fullImageReady=false,fullImageLoading=false;
-let awaitingFullLoad=false,pendingZoomTarget=null;
+let awaitingFullLoad=false,pendingZoomTarget=null,fullImageLoadFailed=false;
 const ZOOM_MAX=4; // 400% of true native pixels — "go beyond 1:1" per spec, capped so it can't run away
 
 function stageEl(){return document.querySelector('.stage');}
@@ -776,7 +776,10 @@ function renderStage(){
   const desired=wantFull?fullImageUrl:p.previewUrl;
   if(desired){
     if(img.src!==desired){
-      if(wantFull)awaitingFullLoad=true;
+      if(wantFull){
+        awaitingFullLoad=true;
+        zoomLog(`renderStage: assigning img.src to full image, browser fetch+decode starting: ${desired}`);
+      }
       img.src=desired;
     }
     img.style.visibility='visible';
@@ -787,17 +790,44 @@ function renderStage(){
   }
 }
 
+function zoomLog(msg){
+  if(typeof pywebview!=='undefined')pywebview.api.log(msg);
+}
+
 // fires for every src renderStage() sets, including plain preview loads —
 // only acts when it's specifically the full-image load we were waiting on
 $('c-img').addEventListener('load',()=>{
+  zoomLog(`img 'load' event fired, src=${$('c-img').src}, awaitingFullLoad=${awaitingFullLoad}`);
   if(!awaitingFullLoad)return;
+  zoomLog(`decode finished: naturalWidth=${$('c-img').naturalWidth} naturalHeight=${$('c-img').naturalHeight}`);
   awaitingFullLoad=false;
   fullImageReady=true;
   $('zoom-loading').classList.remove('on');
   if(pendingZoomTarget){
+    zoomLog('applying pending zoom target now that full image is ready');
     doZoom(pendingZoomTarget.mult,pendingZoomTarget.x,pendingZoomTarget.y);
     pendingZoomTarget=null;
+    zoomLog('image displayed');
   }
+});
+
+// THE GAP: without this, a failed file:// load (bad path, missing file,
+// permission denied) fires 'error' instead of 'load' -- and with nothing
+// listening for it, awaitingFullLoad/fullImageLoading never clear and the
+// "loading full resolution" indicator spins forever with no signal anyone
+// failed. Surfaces to the stage-error UI instead of hanging silently.
+$('c-img').addEventListener('error',()=>{
+  zoomLog(`img 'error' event fired, src=${$('c-img').src}, awaitingFullLoad=${awaitingFullLoad}`);
+  if(!awaitingFullLoad)return;
+  awaitingFullLoad=false;
+  fullImageReady=false;
+  fullImageChecked=true;
+  fullImageUrl=null; // treat as "no usable full image" so we fall back to the preview, not stuck
+  fullImageLoadFailed=true;
+  $('zoom-loading').classList.remove('on');
+  renderStage(); // falls back to the preview since fullImageUrl is now null
+  if(pendingZoomTarget){doZoom(pendingZoomTarget.mult,pendingZoomTarget.x,pendingZoomTarget.y);pendingZoomTarget=null;}
+  updateZoomIndicator();
 });
 
 function computeFitScaleFor(w,h){
@@ -823,7 +853,7 @@ function maybeResetZoomForPaint(){
   // which must see the fresh (cleared) state for the new P[i], not a stale
   // fullImageUrl left over from whichever photo we're navigating away from
   fullImageUrl=null;fullImageChecked=false;fullImageReady=false;fullImageLoading=false;
-  awaitingFullLoad=false;pendingZoomTarget=null;
+  awaitingFullLoad=false;pendingZoomTarget=null;fullImageLoadFailed=false;
   $('zoom-loading').classList.remove('on');
   snapToFit();
   lastZoomPaintIndex=i;
@@ -867,7 +897,8 @@ function updateZoomIndicator(){
   pctEl.textContent=pct+'%';
   const atTrue100=fullImageChecked&&fullImageUrl&&Math.abs(zoomScale-1)<0.005;
   pctEl.classList.toggle('at-100',atTrue100);
-  noteEl.textContent = (fullImageChecked&&!fullImageUrl) ? 'preview resolution — no JPEG for this photo'
+  noteEl.textContent = fullImageLoadFailed ? "couldn't load full resolution — see terminal, showing preview"
+    : (fullImageChecked&&!fullImageUrl) ? 'preview resolution — no JPEG for this photo'
     : atTrue100 ? 'true 100%' : '';
 }
 
@@ -887,19 +918,38 @@ function applyZoom(multiplier,clientX,clientY){
   pendingZoomTarget={mult:multiplier,x:clientX,y:clientY};
   if(fullImageLoading)return;
   fullImageLoading=true;
+  fullImageLoadFailed=false;
   $('zoom-loading').classList.add('on');
+  zoomLog(`applyZoom: request received for identity=${p.identity} (${p.name})`);
+  zoomLog('applyZoom: bridge call issued -> get_full_image_url');
   pywebview.api.get_full_image_url(p.identity).then(url=>{
+    zoomLog(`applyZoom: bridge call returned, url=${url}`);
     fullImageLoading=false;
     fullImageChecked=true;
     fullImageUrl=url;
     if(!url){
       // raw-only pair, no JPEG master — the preview (already loaded) is final
+      zoomLog('applyZoom: no url (raw-only pair) -- falling back to preview, image displayed');
       fullImageReady=true;
       $('zoom-loading').classList.remove('on');
       if(pendingZoomTarget){doZoom(pendingZoomTarget.mult,pendingZoomTarget.x,pendingZoomTarget.y);pendingZoomTarget=null;}
     }else{
-      renderStage(); // starts the real load; the 'load' listener above finishes the job
+      zoomLog('applyZoom: read started (assigning img.src, browser will fetch+decode)');
+      renderStage(); // starts the real load; the 'load'/'error' listeners above finish the job
     }
+  }).catch(err=>{
+    // THE OTHER GAP: without this, a Python-side exception (or a rejected
+    // bridge call for any reason) left fullImageLoading stuck true forever
+    // — nothing else in this chain would ever clear it or hide the spinner.
+    zoomLog(`applyZoom: bridge call REJECTED: ${err&&err.message?err.message:err}`);
+    fullImageLoading=false;
+    fullImageChecked=true;
+    fullImageUrl=null;
+    fullImageReady=true;
+    fullImageLoadFailed=true;
+    $('zoom-loading').classList.remove('on');
+    if(pendingZoomTarget){doZoom(pendingZoomTarget.mult,pendingZoomTarget.x,pendingZoomTarget.y);pendingZoomTarget=null;}
+    updateZoomIndicator();
   });
 }
 

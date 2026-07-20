@@ -2,10 +2,13 @@ import json
 import os
 import subprocess
 import threading
+import time
 import traceback
+from pathlib import Path
 
 import webview
 
+import cache
 import exiftool_path
 import output
 import state
@@ -225,15 +228,68 @@ class Api:
         path = self._ensure_cache().request(record.to_dict(), kind, priority=priority)
         return ('file://' + path) if path else None
 
+    def log(self, msg):
+        """Passthrough so front-end steps land in the same terminal stream
+        as the Python-side ones — one linear log to read, not two."""
+        print(f'[zoom] {msg}', flush=True)
+        return True
+
     def get_full_image_url(self, identity):
-        """For zoom past fit: the source JPEG itself, not a cache tier —
-        it's already a file on disk (~10MB for an OM-1), nothing to
-        generate. Returns None for a raw-only pair (no JPEG master); the
-        front-end falls back to zooming the existing preview in that case."""
+        """For zoom past fit: a LOCAL copy of the source JPEG, made once per
+        photo. NOT the source path directly, even though it's already a
+        file on disk — confirmed by direct reproduction (mounted a real
+        disk image under /Volumes/ and tried to load a file:// image from
+        it in this exact webview): the main Python process can read a file
+        on a removable volume fine, but WKWebView's renderer process cannot
+        load a file:// resource from one at all, full stop — it fires
+        'error' immediately, every time. Since the input folder is
+        routinely an SD card (CLAUDE.md), pointing the zoomed <img> at the
+        source directly, as the first version of this did, meant zoom could
+        never actually reach full resolution for a real card. See
+        cache.ensure_local_full_copy. Returns None for a raw-only pair (no
+        JPEG master); the front-end falls back to zooming the preview."""
+        t0 = time.monotonic()
+        print(f'[zoom] get_full_image_url: request received, identity={identity!r}', flush=True)
         record = self._records_by_identity.get(identity)
-        if not record or not record.jpg_path:
+        if not record:
+            print(f'[zoom] get_full_image_url: identity not found in _records_by_identity ({len(self._records_by_identity)} known)', flush=True)
             return None
-        return 'file://' + record.jpg_path
+        print(f'[zoom] get_full_image_url: record found, stem={record.stem!r} jpg_path={record.jpg_path!r}', flush=True)
+        if not record.jpg_path:
+            print('[zoom] get_full_image_url: no jpg_path (raw-only pair) -- returning None', flush=True)
+            return None
+        exists = os.path.exists(record.jpg_path)
+        print(f'[zoom] get_full_image_url: file located, os.path.exists={exists}', flush=True)
+        if not exists:
+            print(f'[zoom] get_full_image_url: FILE MISSING at {record.jpg_path!r} -- returning None', flush=True)
+            return None
+
+        def log(msg):
+            print(f'[zoom] get_full_image_url: {msg}', flush=True)
+
+        try:
+            local_path = cache.ensure_local_full_copy(record.to_dict(), log=log)
+        except Exception as exc:
+            print(f'[zoom] get_full_image_url: local copy FAILED: {exc!r}', flush=True)
+            traceback.print_exc()
+            return None
+        if not local_path:
+            print('[zoom] get_full_image_url: ensure_local_full_copy returned nothing', flush=True)
+            return None
+
+        # Path.as_uri() percent-encodes the path (spaces, etc.) -- a naive
+        # 'file://' + path string concat, which this used to be, produces a
+        # malformed URL for any path containing a space. Empirically WebKit
+        # tolerated a bare space here (auto-normalized it), but there's no
+        # reason to rely on that leniency for anything less common.
+        try:
+            url = Path(local_path).as_uri()
+        except ValueError as exc:
+            print(f'[zoom] get_full_image_url: Path(...).as_uri() FAILED: {exc!r}', flush=True)
+            return None
+        elapsed = time.monotonic() - t0
+        print(f'[zoom] get_full_image_url: returning url={url!r} ({elapsed*1000:.1f}ms total)', flush=True)
+        return url
 
     def load_config(self):
         if os.path.exists(CONFIG_PATH):

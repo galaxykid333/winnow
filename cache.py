@@ -12,9 +12,11 @@ the user's current position to be generated first.
 import io
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
+import time
 import traceback
 
 from PIL import Image, ImageOps
@@ -28,6 +30,54 @@ SIZES = {
     'thumbnail': (os.path.join(CACHE_ROOT, 'thumbnails'), 200),
     'preview': (os.path.join(CACHE_ROOT, 'previews'), 2000),
 }
+
+FULL_DIR = os.path.join(CACHE_ROOT, 'full')
+
+
+def ensure_local_full_copy(record, log=None):
+    """Zoom past fit wants the source JPEG at full resolution. Confirmed by
+    direct reproduction (mount a real disk image under /Volumes/, try to
+    load a file:// image from it): the main Python process can read a file
+    on a removable volume (SD card) just fine, but WKWebView's renderer
+    process cannot load a file:// resource from one at all — it fires
+    'error' immediately. Pointing <img src> straight at the source on the
+    card, as the first version of this did, meant zoom could never work off
+    a real card at all. So: copy the JPEG into local cache once per photo
+    (atomic temp-then-rename, skip if an identically-sized copy already
+    exists — same pattern as output.py's file copies) and always serve
+    zoom from there instead."""
+
+    def _log(msg):
+        if log:
+            log(msg)
+
+    jpg = record.get('jpg_path')
+    if not jpg:
+        return None
+    identity = record['identity']
+    dest = os.path.join(FULL_DIR, f'{identity}.jpg')
+
+    src_size = os.path.getsize(jpg)
+    if os.path.exists(dest) and os.path.getsize(dest) == src_size:
+        _log(f'ensure_local_full_copy: already cached locally at {dest}')
+        return dest
+
+    _log(f'ensure_local_full_copy: copying {jpg} ({src_size} bytes) -> local cache')
+    t0 = time.monotonic()
+    os.makedirs(FULL_DIR, exist_ok=True)
+    tmp = dest + f'.tmp-{os.getpid()}'
+    try:
+        shutil.copyfile(jpg, tmp)
+        copied_size = os.path.getsize(tmp)
+        if copied_size != src_size:
+            raise IOError(f'copied size {copied_size} != source size {src_size}')
+        os.replace(tmp, dest)
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+    _log(f'ensure_local_full_copy: copy finished in {(time.monotonic()-t0)*1000:.0f}ms -> {dest}')
+    return dest
 
 
 def cache_path(identity, kind):
