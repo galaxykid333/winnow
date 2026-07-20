@@ -32,6 +32,24 @@ input{font:inherit;color:inherit;background:none;border:0;outline:0}
 
 .stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;padding:8px 28px;min-height:0;position:relative}
 .stage img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+/* zoom (fit <-> 100%+, past which we swap the src to the full JPEG): fit
+   mode is the flex+object-fit rules above, unchanged. Zoomed mode switches
+   to a scrollable viewport with the image rendered at explicit
+   natural*scale pixel dimensions — panning is then native scroll, clamped
+   to the image bounds for free by the browser. */
+.stage.zoomed{overflow:auto;justify-content:flex-start;align-items:flex-start;cursor:grab}
+.stage.zoomed.dragging{cursor:grabbing}
+.stage.zoomed img{max-width:none;max-height:none;object-fit:none}
+.zoom-indicator{display:none;position:absolute;bottom:14px;right:14px;background:rgba(19,21,25,.82);
+  border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-size:12px;
+  color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none;gap:8px;align-items:baseline}
+.stage.zoomed .zoom-indicator{display:flex}
+.zoom-indicator #zoom-pct.at-100{color:var(--keep);font-weight:500}
+.zoom-note{font-size:11px;color:var(--faint)}
+.zoom-loading{display:none;position:absolute;bottom:14px;left:14px;background:rgba(19,21,25,.82);
+  border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-size:12px;color:var(--muted);
+  pointer-events:none}
+.zoom-loading.on{display:block}
 
 /* thumbnail strip — top of cull screen, the one persistent-chrome exception (SESSION-FLOW.md §3) */
 .thumbbar{flex:0 0 auto;height:64px;position:relative;border-bottom:1px solid var(--line);
@@ -290,7 +308,12 @@ h3{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-t
     <div class="thumbstrip-scroll" id="c-thumbstrip-scroll"><div class="thumbstrip-track" id="c-thumbstrip"></div></div>
     <button class="thumb-toggle" onclick="toggleStrip()" title="Collapse strip (s)">&and;</button>
   </div>
-  <div class="stage"><img id="c-img" alt=""><div class="stage-error" id="c-stage-error">Couldn't load this preview — see the terminal for why, or check Settings for the exiftool path.</div></div>
+  <div class="stage">
+    <img id="c-img" alt="">
+    <div class="stage-error" id="c-stage-error">Couldn't load this preview — see the terminal for why, or check Settings for the exiftool path.</div>
+    <div class="zoom-loading" id="zoom-loading">Loading full resolution&hellip;</div>
+    <div class="zoom-indicator" id="zoom-indicator"><span id="zoom-pct"></span><span class="zoom-note" id="zoom-note"></span></div>
+  </div>
   <div class="verdicts">
     <button class="vb keep" id="vb-keep" onclick="pick(0)"><b>Keep</b><span>space</span></button>
     <button class="vb great" id="vb-great" onclick="pick(1)"><b>Keep &amp; mark great</b><span>g</span></button>
@@ -671,7 +694,7 @@ function onCacheReady(identity,kind,path){
   if(kind==='preview'){
     if(path){p.previewUrl=path;p.previewFailed=false;}
     else{p.previewFailed=true;}
-    if(P[i]&&P[i].identity===identity)showStageImage(p);
+    if(P[i]&&P[i].identity===identity)renderStage();
   }else if(kind==='thumbnail'){
     if(path){p.thumbUrl=path;p.thumbFailed=false;}
     else{p.thumbFailed=true;}
@@ -680,24 +703,13 @@ function onCacheReady(identity,kind,path){
   }
 }
 
-function showStageImage(p){
-  const img=$('c-img'),err=$('c-stage-error');
-  if(p.previewUrl){
-    img.src=p.previewUrl;img.style.visibility='visible';
-    err.classList.remove('on');
-  }else{
-    img.removeAttribute('src');img.style.visibility='hidden';
-    err.classList.toggle('on',!!p.previewFailed);
-  }
-}
-
 function loadStagePhoto(p){
-  showStageImage(p);
+  renderStage();
   if(p.previewUrl||p.previewFailed||!p.identity||typeof pywebview==='undefined')return;
   pywebview.api.request_image(p.identity,'preview',0).then(path=>{
     if(!path)return; // still pending — onCacheReady will report success or failure
     p.previewUrl=path;
-    if(P[i]&&P[i].identity===p.identity)showStageImage(p);
+    if(P[i]&&P[i].identity===p.identity)renderStage();
   });
 }
 
@@ -712,10 +724,233 @@ function prefetchAround(){
     pywebview.api.request_image(p.identity,'preview',Math.abs(off)).then(path=>{
       if(!path)return;
       p.previewUrl=path;
-      if(P[i]&&P[i].identity===p.identity)showStageImage(p);
+      if(P[i]&&P[i].identity===p.identity)renderStage();
     });
   }
 }
+
+// ---- zoom: pointer-driven, Lightroom-style — hover the photo, two-finger
+// scroll (or a plain mouse wheel) to zoom, click-drag to pan when zoomed.
+// No keyboard shortcut: this is deliberately a pointer gesture only.
+//
+// SINGLE SOURCE OF TRUTH: renderStage() is the *only* place that ever
+// assigns #c-img's src. Every async event that used to write img.src
+// directly (a preview finishing generation, a late onCacheReady push, the
+// zoom feature swapping to the full JPEG) now just updates state
+// (p.previewUrl / zoomMode / fullImageUrl) and calls renderStage() to
+// reconcile. That's the actual fix for the old bug: it wasn't really "zoom
+// forgot to check a flag", it was that two independent writers (the lazy
+// preview loader and the zoom feature) both thought they owned img.src.
+// Proven with a driver script before this rewrite: triggering zoom, then
+// firing a delayed onCacheReady for the same photo (simulating background
+// cache generation finishing late), silently overwrote the zoomed image
+// back to the small preview mid-zoom.
+//
+// "100%" means 1 image pixel = 1 screen pixel of the FULL-size JPEG, not
+// the ~2000px preview cache — a 20MP OM-1 frame needs the real file to
+// judge sharpness. The full JPEG (already a file on disk, no cache
+// generation) is fetched once per photo, only once zoom actually happens.
+// zoomMultiplier is scroll-wheel "notches away from fit" — tracked
+// independently of which tier (preview vs. full) happens to be loaded at
+// the time, because those have different pixel dimensions and mixing the
+// two units was its own bug caught while designing this. The actual CSS
+// scale is only ever derived from it once the authoritative image (full,
+// or confirmed-absent-so-preview-is-final) has actually finished loading.
+let zoomMode='fit',zoomScale=1,zoomMultiplier=1,lastZoomPaintIndex=-1;
+let fullImageUrl=null,fullImageChecked=false,fullImageReady=false,fullImageLoading=false;
+let awaitingFullLoad=false,pendingZoomTarget=null;
+const ZOOM_MAX=4; // 400% of true native pixels — "go beyond 1:1" per spec, capped so it can't run away
+
+function stageEl(){return document.querySelector('.stage');}
+
+function renderStage(){
+  const img=$('c-img'),err=$('c-stage-error');
+  const p=P[i];
+  if(!p){img.removeAttribute('src');img.style.visibility='hidden';err.classList.remove('on');return;}
+  // Once resolved, prefer the full image for the rest of this photo's
+  // viewing session (fit-scale or zoomed — doesn't matter, it's already
+  // loaded, redisplaying it smaller costs nothing) rather than gating on
+  // zoomMode==='zoomed', which only flips *after* the full image has
+  // already loaded and would otherwise create a circular wait.
+  const wantFull=fullImageChecked&&fullImageUrl;
+  const desired=wantFull?fullImageUrl:p.previewUrl;
+  if(desired){
+    if(img.src!==desired){
+      if(wantFull)awaitingFullLoad=true;
+      img.src=desired;
+    }
+    img.style.visibility='visible';
+    err.classList.remove('on');
+  }else{
+    img.removeAttribute('src');img.style.visibility='hidden';
+    err.classList.toggle('on',!!p.previewFailed);
+  }
+}
+
+// fires for every src renderStage() sets, including plain preview loads —
+// only acts when it's specifically the full-image load we were waiting on
+$('c-img').addEventListener('load',()=>{
+  if(!awaitingFullLoad)return;
+  awaitingFullLoad=false;
+  fullImageReady=true;
+  $('zoom-loading').classList.remove('on');
+  if(pendingZoomTarget){
+    doZoom(pendingZoomTarget.mult,pendingZoomTarget.x,pendingZoomTarget.y);
+    pendingZoomTarget=null;
+  }
+});
+
+function computeFitScaleFor(w,h){
+  const st=stageEl();
+  if(!w||!h||!st)return 1;
+  return Math.min(1,st.clientWidth/w,st.clientHeight/h);
+}
+
+function snapToFit(){
+  zoomMode='fit';zoomScale=1;zoomMultiplier=1;
+  const st=stageEl(),img=$('c-img');
+  st.classList.remove('zoomed');
+  img.style.width='';img.style.height='';
+  renderStage();
+}
+
+// called every paint() — only actually resets when the photo changed, not
+// on a same-photo repaint (e.g. pressing Keep just enters tag mode on the
+// same photo; zoom should only reset on an actual photo change)
+function maybeResetZoomForPaint(){
+  if(i===lastZoomPaintIndex)return;
+  // clear the full-image state BEFORE snapToFit() -- it calls renderStage(),
+  // which must see the fresh (cleared) state for the new P[i], not a stale
+  // fullImageUrl left over from whichever photo we're navigating away from
+  fullImageUrl=null;fullImageChecked=false;fullImageReady=false;fullImageLoading=false;
+  awaitingFullLoad=false;pendingZoomTarget=null;
+  $('zoom-loading').classList.remove('on');
+  snapToFit();
+  lastZoomPaintIndex=i;
+}
+
+// the actual resize+scroll math. Only ever called once the image currently
+// in #c-img is the SETTLED, authoritative one for this zoom level (full
+// JPEG loaded, or confirmed there isn't one) — so img.naturalWidth/Height
+// are always meaningful here, never mid-swap.
+function doZoom(multiplier,clientX,clientY){
+  const img=$('c-img'),st=stageEl();
+  const w=img.naturalWidth,h=img.naturalHeight;
+  if(!w||!h)return;
+  const fit=computeFitScaleFor(w,h);
+  if(multiplier<=1){snapToFit();return;}
+  const scale=Math.min(ZOOM_MAX,fit*multiplier);
+  zoomMultiplier=scale/fit; // resync so a clamped scale doesn't leave a "dead zone" before zooming out has any visible effect
+
+  const wasZoomed=zoomMode==='zoomed';
+  const prevScale=zoomScale;
+  const rect=st.getBoundingClientRect();
+  const px=clientX!=null?clientX-rect.left:st.clientWidth/2;
+  const py=clientY!=null?clientY-rect.top:st.clientHeight/2;
+  // the point under the cursor, in image-space, must stay under the cursor
+  const imgX=wasZoomed?(st.scrollLeft+px)/prevScale:w/2;
+  const imgY=wasZoomed?(st.scrollTop+py)/prevScale:h/2;
+
+  zoomMode='zoomed';zoomScale=scale;
+  st.classList.add('zoomed');
+  renderStage();
+  img.style.width=(w*scale)+'px';
+  img.style.height=(h*scale)+'px';
+  st.scrollLeft=imgX*scale-px;
+  st.scrollTop=imgY*scale-py;
+  updateZoomIndicator();
+}
+
+function updateZoomIndicator(){
+  const pctEl=$('zoom-pct'),noteEl=$('zoom-note');
+  const pct=Math.round(zoomScale*100);
+  pctEl.textContent=pct+'%';
+  const atTrue100=fullImageChecked&&fullImageUrl&&Math.abs(zoomScale-1)<0.005;
+  pctEl.classList.toggle('at-100',atTrue100);
+  noteEl.textContent = (fullImageChecked&&!fullImageUrl) ? 'preview resolution — no JPEG for this photo'
+    : atTrue100 ? 'true 100%' : '';
+}
+
+// every zoom request (wheel tick) routes through here. If we don't yet
+// know whether this photo has a full-size JPEG, fetch it first (once per
+// photo — cached in fullImageUrl) and hold the request; nothing resizes
+// until the authoritative image is actually ready, so the stage is never
+// caught showing a size computed against the wrong tier.
+function applyZoom(multiplier,clientX,clientY){
+  const p=P[i];
+  if(!p||!p.identity)return;
+  if(fullImageChecked){
+    if(fullImageReady)doZoom(multiplier,clientX,clientY);
+    else pendingZoomTarget={mult:multiplier,x:clientX,y:clientY}; // still decoding — remember the latest ask
+    return;
+  }
+  pendingZoomTarget={mult:multiplier,x:clientX,y:clientY};
+  if(fullImageLoading)return;
+  fullImageLoading=true;
+  $('zoom-loading').classList.add('on');
+  pywebview.api.get_full_image_url(p.identity).then(url=>{
+    fullImageLoading=false;
+    fullImageChecked=true;
+    fullImageUrl=url;
+    if(!url){
+      // raw-only pair, no JPEG master — the preview (already loaded) is final
+      fullImageReady=true;
+      $('zoom-loading').classList.remove('on');
+      if(pendingZoomTarget){doZoom(pendingZoomTarget.mult,pendingZoomTarget.x,pendingZoomTarget.y);pendingZoomTarget=null;}
+    }else{
+      renderStage(); // starts the real load; the 'load' listener above finishes the job
+    }
+  });
+}
+
+// wheel: two-finger trackpad scroll AND pinch (WebKit/Chrome/Firefox all
+// report trackpad pinch as a synthetic wheel event with ctrlKey:true — there
+// is no separate pinch-only path to listen for) AND a plain mouse wheel, all
+// through the one DOM event. {passive:false} is required or preventDefault
+// is silently ignored and WKWebView zooms the whole page instead of the
+// photo. Scoped to .stage only — the thumbnail strip and grid keep native
+// scrolling untouched. Coalesced through one rAF per frame so a burst of
+// trackpad events doesn't thrash layout, but resize+scroll are always
+// applied together inside doZoom, never split across frames.
+let wheelRaf=null,wheelClientX=0,wheelClientY=0;
+stageEl().addEventListener('wheel',e=>{
+  e.preventDefault();
+  zoomMultiplier=Math.max(0.05,zoomMultiplier*Math.exp(-e.deltaY*0.0018));
+  wheelClientX=e.clientX;wheelClientY=e.clientY;
+  if(wheelRaf)return;
+  wheelRaf=requestAnimationFrame(()=>{
+    wheelRaf=null;
+    applyZoom(zoomMultiplier,wheelClientX,wheelClientY);
+  });
+},{passive:false});
+
+// pan: Pointer Events + capture, so a fast drag keeps tracking even if the
+// cursor briefly leaves the stage — plain mousemove/mouseup can miss events
+// mid-drag, pointer capture can't. Bounds clamping is free: scrollLeft/Top
+// on a native overflow:auto container are clamped by the browser itself.
+let panPointerId=null,panStartX=0,panStartY=0,panScrollLeft=0,panScrollTop=0;
+const stageElForPan=stageEl();
+stageElForPan.addEventListener('pointerdown',e=>{
+  if(zoomMode!=='zoomed')return;
+  panPointerId=e.pointerId;
+  panStartX=e.clientX;panStartY=e.clientY;
+  panScrollLeft=stageElForPan.scrollLeft;panScrollTop=stageElForPan.scrollTop;
+  stageElForPan.classList.add('dragging');
+  stageElForPan.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+stageElForPan.addEventListener('pointermove',e=>{
+  if(panPointerId===null||e.pointerId!==panPointerId)return;
+  stageElForPan.scrollLeft=panScrollLeft-(e.clientX-panStartX);
+  stageElForPan.scrollTop=panScrollTop-(e.clientY-panStartY);
+});
+function endPan(e){
+  if(panPointerId===null||(e&&e.pointerId!==panPointerId))return;
+  panPointerId=null;
+  stageElForPan.classList.remove('dragging');
+}
+stageElForPan.addEventListener('pointerup',endPan);
+stageElForPan.addEventListener('pointercancel',endPan);
 
 // ---- prototype file-picker logic (browser fallback) ----
 
@@ -736,6 +971,7 @@ const kept=()=>P.filter(p=>p.verdict==='keep');
 function paint(){
   if(i>=P.length)return finish();
   const p=P[i];
+  maybeResetZoomForPaint();
   loadStagePhoto(p);
   prefetchAround();
   $('c-site').textContent=p.date.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});

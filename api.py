@@ -225,6 +225,16 @@ class Api:
         path = self._ensure_cache().request(record.to_dict(), kind, priority=priority)
         return ('file://' + path) if path else None
 
+    def get_full_image_url(self, identity):
+        """For zoom past fit: the source JPEG itself, not a cache tier —
+        it's already a file on disk (~10MB for an OM-1), nothing to
+        generate. Returns None for a raw-only pair (no JPEG master); the
+        front-end falls back to zooming the existing preview in that case."""
+        record = self._records_by_identity.get(identity)
+        if not record or not record.jpg_path:
+            return None
+        return 'file://' + record.jpg_path
+
     def load_config(self):
         if os.path.exists(CONFIG_PATH):
             try:
