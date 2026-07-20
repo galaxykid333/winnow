@@ -9,6 +9,7 @@ import webview
 import exiftool_path
 import output
 import state
+import vocab
 from cache import CacheManager
 from ingest import group_by_date, scan_input_folder
 
@@ -30,6 +31,12 @@ class Api:
         opening Console.app."""
         path, version = exiftool_path.resolve()
         return {'found': bool(path), 'path': path, 'version': version}
+
+    def get_species_vocabulary(self):
+        """Subject tag vocabulary (birds, mammals, ...) for the tag field's
+        autocomplete — merged from every *-tags.json in the repo root, see
+        vocab.py. Loaded once at startup by the front-end."""
+        return vocab.load_species_vocabulary()
 
     def pick_folder(self, title):
         result = webview.windows[0].create_file_dialog(webview.FileDialog.FOLDER)

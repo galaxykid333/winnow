@@ -21,6 +21,7 @@ import shutil
 import subprocess
 
 import exiftool_path
+import vocab
 
 XMP_TIMEOUT = 30
 
@@ -56,7 +57,10 @@ def _copy_with_resume(src, dest_dir):
 def _xmp_tags(record):
     tags = []
     for s in record['sp']:
-        tags.append(f'Bird|{s}')
+        # a photo's sp list only stores the common name (e.g. "Roe deer") --
+        # branch_for_name recovers which parallel XMP branch it belongs to
+        # (Bird|/Mammal|/Amphibian|/Reptile|/...), per SPEC.md §7
+        tags.append(f'{vocab.branch_for_name(s)}|{s}')
     for n in record['nt']:
         tags.append(f'Note|{n}')
     if record.get('location'):

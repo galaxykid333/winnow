@@ -145,10 +145,13 @@ XMP hierarchical keywords, because exiftool, Lightroom, and digiKam all read the
 
 ```
 Bird|Dunnock          species — repeatable, a photo may have several
-Also|Blue tit         secondary or background birds
-Note|Nesting          behaviour and context notes — repeatable
-Site|Spurn            set once per session
-Status|Confirmed      Confirmed by the user, or Unconfirmed from a model
+Mammal|Roe deer        \
+Amphibian|Common frog   > parallel branches, same schema as Bird|, see below
+Reptile|Adder          /
+Also|Blue tit          secondary or background birds
+Note|Nesting           behaviour and context notes — repeatable
+Site|Spurn             set once per session
+Status|Confirmed       Confirmed by the user, or Unconfirmed from a model
 ```
 
 - **Species must be multi-valued from day one.** A photo can contain more than
@@ -157,6 +160,38 @@ Status|Confirmed      Confirmed by the user, or Unconfirmed from a model
   reads that field, so marked photos light up in Finder, Lightroom, and digiKam
   with no translation. 1–4 stay unused and available.
 - Date needs no tag. It's already in EXIF; season is derived at query time.
+
+**Subject branches beyond birds.** A roe deer can't live under `Bird|`, so each
+kind of subject gets its own parallel branch — `Mammal|`, `Amphibian|`,
+`Reptile|`, and whatever gets added later (butterflies, dragonflies, ...). In
+the UI these are not a separate feature: a mammal chip is a species chip, same
+green as a bird, because the distinction that matters when culling is subject
+vs. note, not which taxon the subject belongs to. Only the XMP branch differs,
+and that's resolved at write time from the vocabulary files (a photo's tag
+list only ever stores the common name, e.g. "Roe deer" — see
+`vocab.branch_for_name` in `output.py`). A name not found in any vocabulary
+file falls back to `Bird|`, so tags written before this existed stay valid
+with no migration.
+
+**Vocabulary is data-driven, not hardcoded.** Every `*-tags.json` file in the
+repo root defines one branch:
+
+```json
+{
+  "Mammal": [["Roe deer", "Capreolus capreolus"], ["Badger", "Meles meles"]],
+  "_aliases": {"European rabbit": "Rabbit", "Reeves's muntjac": "Muntjac"}
+}
+```
+
+`bird-tags.json` and `wildlife-tags.json` (mammals, amphibians, reptiles) ship
+with the app; adding a new branch — butterflies, dragonflies — means dropping
+in another file with the same shape, no code change. `_aliases` maps a typed
+phrase to the canonical common name it should resolve to, so `european
+rabbit` finds Rabbit and `muntjac` finds Muntjac even though neither is the
+literal listed name. The front-end loads and merges all of them into one
+searchable index at startup (`vocab.py` on the Python side); typing `ro`
+surfaces Robin and Roe deer together, and the suggestion list shows which
+branch each hit belongs to in the small label next to it.
 
 **Notes vocabulary** goes through the same input field as species — one field,
 two vocabularies, distinguished by chip colour (species green, notes blue). Seed
@@ -168,9 +203,11 @@ list with aliases so `baby` finds Juvenile and `bif` finds In flight:
 Unrecognised input offers itself as a new note on the last suggestion and joins
 the list. Persist user-created notes across sessions in a config file.
 
-**Species list:** the prototype embeds ~190 common British species with
-scientific names. Replace with the full BOU British list. Match on word-start
-across all words, so `godw` finds both godwits.
+**Species list:** `bird-tags.json` carries ~190 common British species with
+scientific names (the full BOU British list is a future replacement for that
+one file, not a code change). Match on word-start across all words, so `godw`
+finds both godwits — the same matching applies uniformly across every
+branch, not just birds.
 
 ## 8. Query layer
 

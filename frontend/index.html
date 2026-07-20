@@ -369,7 +369,11 @@ h3{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-t
 </section>
 
 <script>
-const SPECIES=[["Dunnock","Prunella modularis"],["Robin","Erithacus rubecula"],["Wren","Troglodytes troglodytes"],["Blackbird","Turdus merula"],["Song thrush","Turdus philomelos"],["Mistle thrush","Turdus viscivorus"],["Redwing","Turdus iliacus"],["Fieldfare","Turdus pilaris"],["Blue tit","Cyanistes caeruleus"],["Great tit","Parus major"],["Coal tit","Periparus ater"],["Marsh tit","Poecile palustris"],["Willow tit","Poecile montanus"],["Crested tit","Lophophanes cristatus"],["Long-tailed tit","Aegithalos caudatus"],["Chaffinch","Fringilla coelebs"],["Brambling","Fringilla montifringilla"],["Goldfinch","Carduelis carduelis"],["Greenfinch","Chloris chloris"],["Linnet","Linaria cannabina"],["Twite","Linaria flavirostris"],["Lesser redpoll","Acanthis cabaret"],["Siskin","Spinus spinus"],["Bullfinch","Pyrrhula pyrrhula"],["Hawfinch","Coccothraustes coccothraustes"],["Crossbill","Loxia curvirostra"],["Yellowhammer","Emberiza citrinella"],["Reed bunting","Emberiza schoeniclus"],["Corn bunting","Emberiza calandra"],["Snow bunting","Plectrophenax nivalis"],["House sparrow","Passer domesticus"],["Tree sparrow","Passer montanus"],["Starling","Sturnus vulgaris"],["Pied wagtail","Motacilla alba"],["Grey wagtail","Motacilla cinerea"],["Yellow wagtail","Motacilla flava"],["Meadow pipit","Anthus pratensis"],["Rock pipit","Anthus petrosus"],["Tree pipit","Anthus trivialis"],["Skylark","Alauda arvensis"],["Swallow","Hirundo rustica"],["House martin","Delichon urbicum"],["Sand martin","Riparia riparia"],["Swift","Apus apus"],["Chiffchaff","Phylloscopus collybita"],["Willow warbler","Phylloscopus trochilus"],["Blackcap","Sylvia atricapilla"],["Garden warbler","Sylvia borin"],["Whitethroat","Curruca communis"],["Lesser whitethroat","Curruca curruca"],["Sedge warbler","Acrocephalus schoenobaenus"],["Reed warbler","Acrocephalus scirpaceus"],["Cetti's warbler","Cettia cetti"],["Goldcrest","Regulus regulus"],["Firecrest","Regulus ignicapilla"],["Spotted flycatcher","Muscicapa striata"],["Pied flycatcher","Ficedula hypoleuca"],["Redstart","Phoenicurus phoenicurus"],["Black redstart","Phoenicurus ochruros"],["Stonechat","Saxicola rubicola"],["Whinchat","Saxicola rubetra"],["Wheatear","Oenanthe oenanthe"],["Nuthatch","Sitta europaea"],["Treecreeper","Certhia familiaris"],["Great spotted woodpecker","Dendrocopos major"],["Green woodpecker","Picus viridis"],["Lesser spotted woodpecker","Dryobates minor"],["Kingfisher","Alcedo atthis"],["Cuckoo","Cuculus canorus"],["Magpie","Pica pica"],["Jay","Garrulus glandarius"],["Jackdaw","Corvus monedula"],["Rook","Corvus frugilegus"],["Carrion crow","Corvus corone"],["Raven","Corvus corax"],["Curlew","Numenius arquata"],["Whimbrel","Numenius phaeopus"],["Bar-tailed godwit","Limosa lapponica"],["Black-tailed godwit","Limosa limosa"],["Oystercatcher","Haematopus ostralegus"],["Avocet","Recurvirostra avosetta"],["Lapwing","Vanellus vanellus"],["Golden plover","Pluvialis apricaria"],["Grey plover","Pluvialis squatarola"],["Ringed plover","Charadrius hiaticula"],["Little ringed plover","Charadrius dubius"],["Knot","Calidris canutus"],["Sanderling","Calidris alba"],["Dunlin","Calidris alpina"],["Curlew sandpiper","Calidris ferruginea"],["Little stint","Calidris minuta"],["Purple sandpiper","Calidris maritima"],["Turnstone","Arenaria interpres"],["Redshank","Tringa totanus"],["Spotted redshank","Tringa erythropus"],["Greenshank","Tringa nebularia"],["Green sandpiper","Tringa ochropus"],["Wood sandpiper","Tringa glareola"],["Common sandpiper","Actitis hypoleucos"],["Snipe","Gallinago gallinago"],["Jack snipe","Lymnocryptes minimus"],["Woodcock","Scolopax rusticola"],["Ruff","Calidris pugnax"],["Grey heron","Ardea cinerea"],["Little egret","Egretta garzetta"],["Great white egret","Ardea alba"],["Spoonbill","Platalea leucorodia"],["Bittern","Botaurus stellaris"],["Mute swan","Cygnus olor"],["Whooper swan","Cygnus cygnus"],["Bewick's swan","Cygnus columbianus"],["Greylag goose","Anser anser"],["Pink-footed goose","Anser brachyrhynchus"],["Brent goose","Branta bernicla"],["Barnacle goose","Branta leucopsis"],["Canada goose","Branta canadensis"],["Shelduck","Tadorna tadorna"],["Mallard","Anas platyrhynchos"],["Teal","Anas crecca"],["Wigeon","Mareca penelope"],["Gadwall","Mareca strepera"],["Pintail","Anas acuta"],["Shoveler","Spatula clypeata"],["Tufted duck","Aythya fuligula"],["Pochard","Aythya ferina"],["Scaup","Aythya marila"],["Eider","Somateria mollissima"],["Common scoter","Melanitta nigra"],["Velvet scoter","Melanitta fusca"],["Goldeneye","Bucephala clangula"],["Goosander","Mergus merganser"],["Red-breasted merganser","Mergus serrator"],["Little grebe","Tachybaptus ruficollis"],["Great crested grebe","Podiceps cristatus"],["Slavonian grebe","Podiceps auritus"],["Black-necked grebe","Podiceps nigricollis"],["Cormorant","Phalacrocorax carbo"],["Shag","Gulosus aristotelis"],["Gannet","Morus bassanus"],["Fulmar","Fulmarus glacialis"],["Manx shearwater","Puffinus puffinus"],["Puffin","Fratercula arctica"],["Guillemot","Uria aalge"],["Razorbill","Alca torda"],["Kittiwake","Rissa tridactyla"],["Black-headed gull","Chroicocephalus ridibundus"],["Common gull","Larus canus"],["Herring gull","Larus argentatus"],["Lesser black-backed gull","Larus fuscus"],["Great black-backed gull","Larus marinus"],["Mediterranean gull","Ichthyaetus melanocephalus"],["Little gull","Hydrocoloeus minutus"],["Glaucous gull","Larus hyperboreus"],["Iceland gull","Larus glaucoides"],["Sandwich tern","Thalasseus sandvicensis"],["Common tern","Sterna hirundo"],["Arctic tern","Sterna paradisaea"],["Little tern","Sternula albifrons"],["Arctic skua","Stercorarius parasiticus"],["Great skua","Stercorarius skua"],["Kestrel","Falco tinnunculus"],["Peregrine","Falco peregrinus"],["Merlin","Falco columbarius"],["Hobby","Falco subbuteo"],["Sparrowhawk","Accipiter nisus"],["Goshawk","Accipiter gentilis"],["Buzzard","Buteo buteo"],["Red kite","Milvus milvus"],["Marsh harrier","Circus aeruginosus"],["Hen harrier","Circus cyaneus"],["White-tailed eagle","Haliaeetus albicilla"],["Golden eagle","Aquila chrysaetos"],["Osprey","Pandion haliaetus"],["Barn owl","Tyto alba"],["Tawny owl","Strix aluco"],["Little owl","Athene noctua"],["Short-eared owl","Asio flammeus"],["Long-eared owl","Asio otus"],["Red grouse","Lagopus lagopus"],["Rock ptarmigan","Lagopus muta"],["Black grouse","Lyrurus tetrix"],["Pheasant","Phasianus colchicus"],["Grey partridge","Perdix perdix"],["Red-legged partridge","Alectoris rufa"],["Moorhen","Gallinula chloropus"],["Coot","Fulica atra"],["Water rail","Rallus aquaticus"],["Woodpigeon","Columba palumbus"],["Stock dove","Columba oenas"],["Collared dove","Streptopelia decaocto"],["Dipper","Cinclus cinclus"],["Waxwing","Bombycilla garrulus"]];
+// Subject vocabulary (birds, mammals, amphibians, reptiles, ...) is
+// data-driven, loaded from *-tags.json files at startup by loadVocabulary()
+// below -- see vocab.py. Adding a branch (e.g. butterflies) means dropping
+// in a new JSON file with the same shape, no code change here.
+let SUBJECT_BRANCHES={},SUBJECT_ALIASES={},SUBJECT_INDEX=[];
 
 let NOTES=[["Multiple birds","several flock group"],["Juvenile","baby chick young immature"],["Nesting","nest breeding"],["In flight","flying bif wings"],["Feeding","eating foraging prey"],["Displaying","display courtship"],["Perched",""],["Swimming","water"],["Pair","two"],["Flock","many"],["Calling","song singing"],["Ringed bird","ring colour-ring"],["Habitat","landscape scene"],["Portrait","close-up"]];
 
@@ -425,7 +429,23 @@ window.addEventListener('pywebviewready',()=>{
     $('s-in-path').textContent=inputFolder||'Not set';
     if(inputFolder)runScan(inputFolder);
   });
+  loadVocabulary();
 });
+
+// Subject vocabulary (birds, mammals, ...) loaded from *-tags.json via the
+// bridge — see vocab.py. SUBJECT_INDEX is the flattened, searchable form;
+// SUBJECT_BRANCHES/SUBJECT_ALIASES keep the raw shape for lookups.
+function loadVocabulary(){
+  if(typeof pywebview==='undefined')return;
+  pywebview.api.get_species_vocabulary().then(v=>{
+    SUBJECT_BRANCHES=v.branches||{};
+    SUBJECT_ALIASES=v.aliases||{};
+    SUBJECT_INDEX=[];
+    Object.entries(SUBJECT_BRANCHES).forEach(([branch,list])=>{
+      list.forEach(([name,sci])=>SUBJECT_INDEX.push({name,sci,branch}));
+    });
+  });
+}
 
 // ---- settings screen ----
 let settingsOptions={raw_handling:'copy',copy_jpegs:false};
@@ -811,16 +831,45 @@ function chips(){
 }
 function drop(k,n){P[i][k].splice(n,1);chips();persistPhoto(i);}
 
+// whole-phrase prefix (so "common fr" -> "Common frog", "european rabbit"
+// typed in full still matches) OR any individual word starting with the
+// query (so "frog", "rabbit", "muntjac" alone all still match)
+function subjectMatch(text,l){
+  const t=(text||'').toLowerCase();
+  return t.startsWith(l)||t.split(/[ -]/).some(w=>w.startsWith(l));
+}
+
 function suggest(q){
   q=q.trim();const l=q.toLowerCase();
-  const match=(name,alt)=>{
-    const s=(name+' '+alt).toLowerCase();
-    return s.split(/[ -]/).some(w=>w.startsWith(l));
-  };
   hits=[];
   if(l){
-    SPECIES.filter(([c])=>match(c,'')).forEach(([c,sc])=>hits.push({k:'sp',v:c,sc}));
-    NOTES.filter(([c,a])=>match(c,a)).forEach(([c])=>hits.push({k:'nt',v:c}));
+    // subjects: search every branch (Bird/Mammal/Amphibian/Reptile/...) as
+    // one combined vocabulary, plus _aliases, deduped by canonical name
+    const seen=new Set();
+    const byBranch={};
+    const addHit=rec=>{
+      if(seen.has(rec.name))return;
+      seen.add(rec.name);
+      (byBranch[rec.branch]=byBranch[rec.branch]||[]).push(rec);
+    };
+    SUBJECT_INDEX.forEach(rec=>{
+      if(subjectMatch(rec.name,l)||subjectMatch(rec.sci,l))addHit(rec);
+    });
+    Object.entries(SUBJECT_ALIASES).forEach(([alias,canonical])=>{
+      if(seen.has(canonical)||!subjectMatch(alias,l))return;
+      const rec=SUBJECT_INDEX.find(r=>r.name===canonical);
+      if(rec)addHit(rec);
+    });
+    // round-robin across branches: a short/common query like "ro" must
+    // surface Robin (Bird) and Roe deer (Mammal) together, not let
+    // whichever branch sorts first fill every slot before others get a turn
+    const branchNames=Object.keys(byBranch);
+    const subjectHits=[];
+    for(let round=0;branchNames.some(b=>byBranch[b][round]);round++){
+      branchNames.forEach(b=>{if(byBranch[b][round])subjectHits.push(byBranch[b][round]);});
+    }
+    subjectHits.forEach(rec=>hits.push({k:'sp',v:rec.name,sc:rec.sci,branch:rec.branch}));
+    NOTES.filter(([c,a])=>subjectMatch(c,l)||subjectMatch(a,l)).forEach(([c])=>hits.push({k:'nt',v:c}));
     hits=hits.slice(0,4);
     if(!hits.some(h=>h.v.toLowerCase()===l))
       hits.push({k:'nt',v:q.charAt(0).toUpperCase()+q.slice(1),neu:true});
@@ -829,7 +878,7 @@ function suggest(q){
   $('c-sugg').innerHTML =
     hits.map((h,n)=>`<button onclick="add(${n})"><span class="n">${n+1}</span>${h.v}`+
       (h.sc?` <span class="sci">${h.sc}</span>`:'')+
-      `<span class="kind">${h.neu?'new note':h.k==='sp'?'':'note'}</span></button>`).join('')+
+      `<span class="kind">${h.neu?'new note':h.k==='sp'?h.branch:'note'}</span></button>`).join('')+
     `<button class="nextbtn" onclick="next()">${any?'Next photo':'Skip tagging'} &rarr;</button>`;
 }
 function add(n){

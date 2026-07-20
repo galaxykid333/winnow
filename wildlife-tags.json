@@ -1,0 +1,79 @@
+{
+  "_comment": "Non-bird subjects for Winnow's tag vocabulary. Same chip colour as birds (both are subjects), but written to a different XMP branch: Mammal|Roe deer, Amphibian|Common frog, Reptile|Adder.",
+
+  "Mammal": [
+    ["Roe deer", "Capreolus capreolus"],
+    ["Red deer", "Cervus elaphus"],
+    ["Fallow deer", "Dama dama"],
+    ["Sika deer", "Cervus nippon"],
+    ["Muntjac", "Muntiacus reevesi"],
+    ["Chinese water deer", "Hydropotes inermis"],
+    ["Red fox", "Vulpes vulpes"],
+    ["Badger", "Meles meles"],
+    ["Otter", "Lutra lutra"],
+    ["Stoat", "Mustela erminea"],
+    ["Weasel", "Mustela nivalis"],
+    ["Pine marten", "Martes martes"],
+    ["Polecat", "Mustela putorius"],
+    ["American mink", "Neogale vison"],
+    ["Scottish wildcat", "Felis silvestris"],
+    ["Wild boar", "Sus scrofa"],
+    ["Rabbit", "Oryctolagus cuniculus"],
+    ["Brown hare", "Lepus europaeus"],
+    ["Mountain hare", "Lepus timidus"],
+    ["Grey squirrel", "Sciurus carolinensis"],
+    ["Red squirrel", "Sciurus vulgaris"],
+    ["Hedgehog", "Erinaceus europaeus"],
+    ["Mole", "Talpa europaea"],
+    ["Water vole", "Arvicola amphibius"],
+    ["Bank vole", "Myodes glareolus"],
+    ["Field vole", "Microtus agrestis"],
+    ["Wood mouse", "Apodemus sylvaticus"],
+    ["Harvest mouse", "Micromys minutus"],
+    ["House mouse", "Mus musculus"],
+    ["Brown rat", "Rattus norvegicus"],
+    ["Common shrew", "Sorex araneus"],
+    ["Pygmy shrew", "Sorex minutus"],
+    ["Water shrew", "Neomys fodiens"],
+    ["Common pipistrelle", "Pipistrellus pipistrellus"],
+    ["Soprano pipistrelle", "Pipistrellus pygmaeus"],
+    ["Noctule", "Nyctalus noctula"],
+    ["Daubenton's bat", "Myotis daubentonii"],
+    ["Brown long-eared bat", "Plecotus auritus"],
+    ["Grey seal", "Halichoerus grypus"],
+    ["Harbour seal", "Phoca vitulina"],
+    ["Harbour porpoise", "Phocoena phocoena"],
+    ["Bottlenose dolphin", "Tursiops truncatus"],
+    ["Common dolphin", "Delphinus delphis"],
+    ["White-beaked dolphin", "Lagenorhynchus albirostris"],
+    ["Minke whale", "Balaenoptera acutorostrata"]
+  ],
+
+  "Amphibian": [
+    ["Common frog", "Rana temporaria"],
+    ["Common toad", "Bufo bufo"],
+    ["Natterjack toad", "Epidalea calamita"],
+    ["Great crested newt", "Triturus cristatus"],
+    ["Smooth newt", "Lissotriton vulgaris"],
+    ["Palmate newt", "Lissotriton helveticus"]
+  ],
+
+  "Reptile": [
+    ["Adder", "Vipera berus"],
+    ["Grass snake", "Natrix helvetica"],
+    ["Smooth snake", "Coronella austriaca"],
+    ["Slow worm", "Anguis fragilis"],
+    ["Common lizard", "Zootoca vivipara"],
+    ["Sand lizard", "Lacerta agilis"]
+  ],
+
+  "_aliases": {
+    "European rabbit": "Rabbit",
+    "Reeves's muntjac": "Muntjac",
+    "Eurasian otter": "Otter",
+    "Eurasian badger": "Badger",
+    "Common seal": "Harbour seal",
+    "Pipistrelle": "Common pipistrelle",
+    "Deer": "Roe deer"
+  }
+}
