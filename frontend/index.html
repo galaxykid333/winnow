@@ -4,23 +4,35 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Winnow</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
+/* Offline desktop app: fonts load from disk, never a CDN — see frontend/fonts/.
+   Instrument Sans/Serif (SIL OFL) is the current UI face. Latin Modern Roman
+   (GUST Font License, frontend/fonts/lmroman10-*.otf) is bundled and ready
+   to use but not yet wired into any element below. */
+@font-face{font-family:'Instrument Sans';src:url('fonts/instrument-sans.woff2') format('woff2');font-weight:400;font-style:normal}
+@font-face{font-family:'Instrument Sans';src:url('fonts/instrument-sans.woff2') format('woff2');font-weight:500;font-style:normal}
+@font-face{font-family:'Instrument Serif';src:url('fonts/instrument-serif.woff2') format('woff2');font-weight:400;font-style:normal}
+@font-face{font-family:'Instrument Serif';src:url('fonts/instrument-serif-italic.woff2') format('woff2');font-weight:400;font-style:italic}
+@font-face{font-family:'Latin Modern Roman';src:url('fonts/lmroman10-regular.otf') format('opentype');font-weight:400;font-style:normal}
+@font-face{font-family:'Latin Modern Roman';src:url('fonts/lmroman10-bold.otf') format('opentype');font-weight:700;font-style:normal}
+@font-face{font-family:'Latin Modern Roman';src:url('fonts/lmroman10-italic.otf') format('opentype');font-weight:400;font-style:italic}
+@font-face{font-family:'Latin Modern Roman';src:url('fonts/lmroman10-bolditalic.otf') format('opentype');font-weight:700;font-style:italic}
 :root{
   --bg:#131519; --surface:#1a1d22; --surface2:#22262c; --line:#2c313a;
   --ink:#e9e7e2; --muted:#8a9099; --faint:#5b616a;
   --keep:#8aa882; --great:#d2a63f; --reject:#b06b60; --note:#7d95a6;
   --sans:'Instrument Sans',system-ui,sans-serif;
   --serif:'Instrument Serif',Georgia,serif;
+  /* Latin Modern Roman, deliberately scoped to the app title and species
+     names only (per user decision) — everything else stays Instrument. */
+  --display:'Latin Modern Roman',Georgia,serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 input{font:inherit;color:inherit;background:none;border:0;outline:0}
-.sci{font-family:var(--serif);font-style:italic;color:var(--muted)}
+.sci{font-family:var(--display);font-style:italic;color:var(--muted)}
 .screen{height:100vh;display:none;flex-direction:column}
 .screen.on{display:flex}
 
@@ -34,12 +46,42 @@ input{font:inherit;color:inherit;background:none;border:0;outline:0}
 .stage img{max-width:100%;max-height:100%;object-fit:contain;display:block}
 /* zoom (fit <-> 100%+, past which we swap the src to the full JPEG): fit
    mode is the flex+object-fit rules above, unchanged. Zoomed mode switches
-   to a scrollable viewport with the image rendered at explicit
-   natural*scale pixel dimensions — panning is then native scroll, clamped
-   to the image bounds for free by the browser. */
+   to a scrollable viewport with the image given an explicit width/height in
+   JS (fitW/fitH * zoomScale — see the zoom section below), panning is then
+   native scroll, clamped to the image bounds for free by the browser.
+   object-fit:fill, not none: with `none`, the browser paints the bitmap at
+   its OWN intrinsic pixel size inside the box, ignoring width/height for
+   scaling entirely -- so the same explicit box showed a completely
+   different crop depending on whether the ~2000px preview or the ~5184px
+   full JPEG was loaded, silently reintroducing a dependency on native
+   resolution that the JS side had just been rearchitected to remove.
+   Confirmed by a standalone repro: identical zoomScale/width/height state
+   before and after the src swap, but the rendered pixels jumped, because
+   `none` was still keying visible scale off which bitmap's real pixel
+   count happened to be loaded. `fill` stretches the loaded bitmap to
+   exactly the given box regardless of its intrinsic size -- since preview
+   and full share the same aspect ratio, that box is the only thing that
+   determines what's on screen, which is the actual fix.
+   justify-content/align-items:flex-start (not center) is deliberate too --
+   centering a flex item that can overflow its container is a known
+   cross-browser trap (the leading/start-side overflow becomes unreachable
+   via scroll in some engines) -- so panning math below always assumes the
+   image's un-scrolled top-left sits at the scrollable content's origin.
+   But that means the INSTANT zoomMode flips to 'zoomed', any dimension
+   that hasn't started overflowing yet (typically only one axis has, right
+   as a zoom gesture begins -- fit-mode leaves the other one letterboxed
+   with room to spare) gets pinned to that top-left origin instead of
+   staying centered like it was in fit mode -- a visible jump to the
+   corner, gradually resolving itself as zooming continues and that axis
+   finally overflows too. margin:auto on a flex item absorbs exactly that
+   leftover space on both axes when there's any to absorb, so the image
+   stays centered for as long as it doesn't overflow, and collapses to
+   zero (identical to flex-start) the moment it does -- getting the
+   "smooth zoom from center" feel without touching the overflow-safe
+   flex-start scroll math at all. */
 .stage.zoomed{overflow:auto;justify-content:flex-start;align-items:flex-start;cursor:grab}
 .stage.zoomed.dragging{cursor:grabbing}
-.stage.zoomed img{max-width:none;max-height:none;object-fit:none}
+.stage.zoomed img{max-width:none;max-height:none;object-fit:fill;margin:auto}
 .zoom-indicator{display:none;position:absolute;bottom:14px;right:14px;background:rgba(19,21,25,.82);
   border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-size:12px;
   color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none;gap:8px;align-items:baseline}
@@ -111,6 +153,7 @@ input{font:inherit;color:inherit;background:none;border:0;outline:0}
 .chips{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-height:36px;
       border-bottom:1px solid var(--line);padding-bottom:8px}
 .chip{border:1px solid var(--keep);color:var(--keep);border-radius:3px;padding:5px 11px;font-size:14px;display:flex;gap:9px;align-items:baseline}
+.chip:not(.n){font-family:var(--display)}
 .chip.n{border-color:var(--note);color:var(--note)}
 .chip .x{color:var(--faint);font-size:12px}
 .chips input{flex:1;min-width:210px;padding:6px 0;font-size:16px}
@@ -130,6 +173,7 @@ input{font:inherit;color:inherit;background:none;border:0;outline:0}
 .corner-link{position:absolute;right:20px;bottom:18px;font-size:12px;color:var(--faint)}
 .corner-link:hover{color:var(--muted)}
 h1{font-family:var(--serif);font-style:italic;font-size:44px;font-weight:400}
+h1.wordmark{font-family:var(--display)}
 .lede{color:var(--muted);max-width:47ch}
 .btn{border:1px solid var(--line);padding:11px 22px;border-radius:3px;transition:border-color .15s,background .15s}
 .btn:hover{border-color:var(--muted);background:var(--surface)}
@@ -181,18 +225,25 @@ h3{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-t
 .cal-nav button{border:1px solid var(--line);border-radius:3px;padding:6px 13px}
 .cal-nav button:hover{border-color:var(--muted);background:var(--surface)}
 .cal-nav h2{font-family:var(--serif);font-style:italic;font-size:26px;font-weight:400;min-width:230px;text-align:center}
-.cal-grid{display:grid;grid-template-columns:repeat(7,64px);gap:6px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,92px);gap:8px}
 .cal-dow{font-size:11px;color:var(--faint);text-align:center;text-transform:uppercase;letter-spacing:.06em;padding-bottom:4px}
-.cal-day{position:relative;height:64px;border:1px solid transparent;border-radius:4px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--faint)}
+.cal-day{position:relative;height:92px;border:1px solid transparent;border-radius:8px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:var(--faint)}
 .cal-day.inert{opacity:.3}
 .cal-day.active{cursor:pointer;color:var(--ink);border-color:var(--line)}
 .cal-day.active:hover{border-color:var(--muted);background:var(--surface)}
 .cal-day.sel{border-color:var(--keep);background:rgba(138,168,130,.12);color:var(--keep)}
-.cal-day .n{font-size:15px}
-.cal-day .c{font-size:10px;color:var(--faint);font-variant-numeric:tabular-nums}
+.cal-day .n{font-size:17px;position:relative;z-index:1}
+.cal-day .c{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums;position:relative;z-index:1}
 .cal-day.sel .c{color:var(--keep);opacity:.85}
-.cal-day .ring{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%}
+/* reviewed-fraction ring: the second-most-legible thing on the cell after
+   the date itself, per user's explicit priority. A donut, not a dot —
+   built with a radial-gradient mask so the stroke reads clearly at a
+   glance without covering the number/count sitting inside it. */
+.cal-day .ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:78px;height:78px;border-radius:50%;pointer-events:none;
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 8px),#000 calc(100% - 8px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 8px),#000 calc(100% - 8px));}
 .cal-hint{font-size:12px;color:var(--faint)}
 
 /* destination screen autocomplete */
@@ -208,8 +259,8 @@ h3{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-t
 <section class="screen on" id="s-start">
   <button class="corner-link" id="settings-link" onclick="openSettings()" style="display:none">Settings</button>
   <div class="mid">
-    <h1>Winnow</h1>
-    <p class="lede">Sort and tag in one pass. Keep a photo and the tag field opens straight away; the last species carries over, so a run of the same bird is two keys each. Mouse or keyboard, both work.</p>
+    <h1 class="wordmark">Winnow</h1>
+    <p class="lede">Import, tag and sort wildlife photos.</p>
 
     <!-- native folder picker shown when running inside pywebview -->
     <div class="folder-ui" id="folder-ui">
@@ -278,19 +329,37 @@ h3{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-t
     <h1 style="font-size:32px">Where does this go?</h1>
     <div class="folder-ui" style="display:flex">
       <div class="folder-row">
+        <span class="label">Folder</span>
+        <div class="choice" id="dest-mode">
+          <button class="choice-opt on" data-val="new" onclick="setDestMode('new')">New folder</button>
+          <button class="choice-opt" data-val="existing" onclick="setDestMode('existing')">Existing folder</button>
+        </div>
+      </div>
+
+      <div class="folder-row" id="dest-parent-row">
         <span class="label">Parent</span>
         <span class="path" id="dest-parent-path">Not set</span>
         <button class="btn" onclick="chooseParentFolder()">Choose…</button>
       </div>
+
+      <div class="folder-row" id="dest-existing-row" style="display:none">
+        <span class="label">Output</span>
+        <span class="path" id="dest-existing-path">Not set</span>
+        <button class="btn" onclick="chooseExistingFolder()">Choose…</button>
+      </div>
+
       <div class="folder-row">
         <span class="label">Location</span>
-        <input id="dest-location" class="path" placeholder="e.g. Spurn" autocomplete="off">
+        <input id="dest-location" class="path" placeholder="" autocomplete="off">
         <div class="autocomplete" id="dest-loc-sugg"></div>
       </div>
-      <div class="folder-row">
-        <span class="label">Folder</span>
+
+      <div class="folder-row" id="dest-name-row">
+        <span class="label">Folder name</span>
         <input id="dest-name" class="path" autocomplete="off">
       </div>
+
+      <p class="lede" id="dest-mode-label" style="font-size:12px;color:var(--muted)"></p>
       <p class="lede" id="dest-status" style="font-size:12px;min-height:16px"></p>
       <button class="btn go" id="dest-begin" onclick="beginSession()">Begin &rarr;</button>
       <button class="btn" style="font-size:13px" onclick="go('s-calendar')">&larr; Back to calendar</button>
@@ -300,7 +369,9 @@ h3{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-t
 
 <section class="screen" id="s-cull">
   <div class="bar"><span class="site" id="c-site"></span>
-    <span class="count"><span id="c-count"></span>
+    <span class="count">
+      <button class="finish" onclick="goToCalendar()" title="Back to calendar — your place here is saved">&larr; Dates</button>
+      <span id="c-count"></span>
       <button class="finish" style="margin-left:16px" onclick="openGrid()" title="Grid view (tab)">Grid</button>
       <button class="finish" onclick="finish()">Finish</button></span></div>
   <div class="rule"><i id="c-prog"></i></div>
@@ -522,6 +593,28 @@ function initCalendar(){
   renderCalendar();
 }
 
+// Refresh reviewed-counts (a cheap SQLite query, not a rescan) and
+// redraw in place — deliberately does NOT touch calMonth/calSel/calAnchor,
+// so returning to the calendar mid-card doesn't jump back to whatever
+// month had the earliest date.
+function refreshCalendarCounts(){
+  pywebview.api.get_date_summary().then(summary=>{
+    dateSummary=summary;
+    summary.forEach(d=>{if(d.date)dateInfo[d.date]={count:d.count,uncertain:d.uncertain,reviewed:d.reviewed||0};});
+    if(screen==='s-calendar')renderCalendar();
+  });
+}
+
+// "Dates" link on the cull screen (SESSION-FLOW.md navigation): verdicts
+// and tags are already persisted through as they happen (persistPhoto), so
+// there is nothing to save here — this is pure navigation. The input
+// folder is never re-scanned; only the reviewed counts are refreshed.
+function goToCalendar(){
+  mode='view';
+  refreshCalendarCounts();
+  go('s-calendar');
+}
+
 function calShiftMonth(d){calMonth.setMonth(calMonth.getMonth()+d);renderCalendar();}
 function dkey(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
 
@@ -561,6 +654,13 @@ function calClick(e,key){
 // ---- destination screen ----
 
 let destNameDirty=false;
+// New folder (default): parent + generated/editable name, per SPEC.md §2.3.
+// Existing folder: browse directly to a folder that's either mid-outing
+// already or doesn't match the generated-name pattern — same resume rules
+// apply either way (SESSION-FLOW.md §6.1), since resume is keyed on the
+// resulting destPath either way, not on how it was chosen.
+let destMode='new';
+let existingFolderPath='';
 
 function sortedSel(){return [...calSel].sort();}
 
@@ -569,10 +669,22 @@ function goDestination(){
   $('dest-parent-path').textContent=parentFolder||'Not set';
   $('dest-location').value='';
   destNameDirty=false;
+  destMode='new';existingFolderPath='';
+  $('dest-existing-path').textContent='Not set';
   $('dest-loc-sugg').classList.remove('on');
-  updateDestName();
+  setDestMode('new');
   go('s-destination');
   $('dest-location').focus();
+}
+
+function setDestMode(m){
+  destMode=m;
+  document.querySelectorAll('#dest-mode .choice-opt').forEach(b=>b.classList.toggle('on',b.dataset.val===m));
+  $('dest-parent-row').style.display=m==='new'?'flex':'none';
+  $('dest-name-row').style.display=m==='new'?'flex':'none';
+  $('dest-existing-row').style.display=m==='existing'?'flex':'none';
+  updateDestModeLabel();
+  checkDestExists();
 }
 
 function chooseParentFolder(){
@@ -583,6 +695,28 @@ function chooseParentFolder(){
     pywebview.api.save_config({parent_folder:path});
     checkDestExists();
   });
+}
+
+function chooseExistingFolder(){
+  pywebview.api.pick_folder('Choose existing output folder').then(path=>{
+    if(!path)return;
+    existingFolderPath=path;
+    $('dest-existing-path').textContent=path;
+    updateDestModeLabel();
+    checkDestExists();
+  });
+}
+
+// what beginSession() will actually use — the single source of truth so
+// the mode label, the exists-check, and the commit action can't disagree
+function currentDestPath(){
+  return destMode==='existing' ? existingFolderPath : joinPath(parentFolder,$('dest-name').value.trim());
+}
+
+function updateDestModeLabel(){
+  $('dest-mode-label').textContent = destMode==='new'
+    ? 'Creating a new folder inside the parent folder above.'
+    : (existingFolderPath ? `Using the existing folder: ${existingFolderPath}` : 'Choose an existing output folder above.');
 }
 
 function computedName(){
@@ -615,6 +749,12 @@ $('dest-location').addEventListener('blur',()=>setTimeout(()=>$('dest-loc-sugg')
 $('dest-name').addEventListener('input',()=>{destNameDirty=true;checkDestExists();});
 
 function checkDestExists(){
+  if(destMode==='existing'){
+    // the user browsed straight to it — it exists by construction; the
+    // mode label already says so, no need for a second message
+    $('dest-status').textContent='';
+    return;
+  }
   const name=$('dest-name').value.trim();
   if(!parentFolder||!name){$('dest-status').textContent='';return;}
   pywebview.api.folder_exists(parentFolder,name).then(exists=>{
@@ -637,14 +777,18 @@ function persistPhoto(idx){
 }
 
 function beginSession(){
-  const name=$('dest-name').value.trim();
-  if(!parentFolder||!name||!calSel.size)return;
+  if(destMode==='existing'){
+    if(!existingFolderPath||!calSel.size)return;
+  }else{
+    const name=$('dest-name').value.trim();
+    if(!parentFolder||!name||!calSel.size)return;
+  }
   const location=$('dest-location').value.trim();
   if(location){
     if(!locations.some(l=>l.toLowerCase()===location.toLowerCase()))locations=[location,...locations];
     pywebview.api.add_location(location);
   }
-  destPath=joinPath(parentFolder,name);
+  destPath=currentDestPath();
   const dates=sortedSel();
   Promise.all([
     pywebview.api.photos_for_dates(dates),
@@ -733,55 +877,71 @@ function prefetchAround(){
 // scroll (or a plain mouse wheel) to zoom, click-drag to pan when zoomed.
 // No keyboard shortcut: this is deliberately a pointer gesture only.
 //
-// SINGLE SOURCE OF TRUTH: renderStage() is the *only* place that ever
-// assigns #c-img's src. Every async event that used to write img.src
-// directly (a preview finishing generation, a late onCacheReady push, the
-// zoom feature swapping to the full JPEG) now just updates state
-// (p.previewUrl / zoomMode / fullImageUrl) and calls renderStage() to
-// reconcile. That's the actual fix for the old bug: it wasn't really "zoom
-// forgot to check a flag", it was that two independent writers (the lazy
-// preview loader and the zoom feature) both thought they owned img.src.
-// Proven with a driver script before this rewrite: triggering zoom, then
-// firing a delayed onCacheReady for the same photo (simulating background
-// cache generation finishing late), silently overwrote the zoomed image
-// back to the small preview mid-zoom.
+// ARCHITECTURE: two concerns, kept fully independent.
 //
-// "100%" means 1 image pixel = 1 screen pixel of the FULL-size JPEG, not
-// the ~2000px preview cache — a 20MP OM-1 frame needs the real file to
-// judge sharpness. The full JPEG (already a file on disk, no cache
-// generation) is fetched once per photo, only once zoom actually happens.
-// zoomMultiplier is scroll-wheel "notches away from fit" — tracked
-// independently of which tier (preview vs. full) happens to be loaded at
-// the time, because those have different pixel dimensions and mixing the
-// two units was its own bug caught while designing this. The actual CSS
-// scale is only ever derived from it once the authoritative image (full,
-// or confirmed-absent-so-preview-is-final) has actually finished loading.
-let zoomMode='fit',zoomScale=1,zoomMultiplier=1,lastZoomPaintIndex=-1;
-let fullImageUrl=null,fullImageChecked=false,fullImageReady=false,fullImageLoading=false;
-let awaitingFullLoad=false,pendingZoomTarget=null,fullImageLoadFailed=false;
-const ZOOM_MAX=4; // 400% of true native pixels — "go beyond 1:1" per spec, capped so it can't run away
+// 1. VISUAL ZOOM is driven entirely by zoomScale (1 = fit, 2 = twice that
+//    on screen, ...) and panFracX/panFracY (the point of the image, as a
+//    0..1 fraction of its own width/height, centered in the viewport).
+//    Display size is ALWAYS fitW*zoomScale / fitH*zoomScale, and scroll
+//    position is ALWAYS re-derived from the pan fraction. Neither of those
+//    expressions ever mentions naturalWidth/naturalHeight of whichever
+//    bitmap happens to be loaded -- that was the entire bug (see below).
+//    This makes the gesture instant and gate-free: it never waits on I/O.
+//
+// 2. RESOLUTION UPGRADE is driven by ensureFullImage()/swapToFullImage(),
+//    fully decoupled from (1). The full JPEG is preloaded off-screen with a
+//    detached Image() so decoding never touches the visible element, and
+//    once ready, swapToFullImage() does exactly one thing: img.src=url.
+//    Nothing else -- not zoomScale, not fitW/fitH, not scroll. Because
+//    display size/scroll never depended on naturalWidth in the first
+//    place, that one-line swap is visually a no-op except sharper pixels.
+//
+// THE OLD BUG: fit, scale, and the <img>'s pixel size were all computed
+// from img.naturalWidth/naturalHeight of whichever src was CURRENTLY
+// loaded. The preview is ~2000px long edge, the full JPEG ~5184px for an
+// OM-1 -- so the exact same zoomMultiplier meant a completely different
+// absolute scale before and after the swap, and the swap silently
+// recomputed everything against the new (much larger) denominator the
+// moment it landed. That's what produced the snap-to-15%-and-crop: the
+// numbers weren't reset on purpose, they were being freshly (and
+// differently) derived the whole time from a value that just changed
+// underneath the gesture. Confirmed directly: naturalWidth/naturalHeight
+// do not appear anywhere in the size/scroll computation below -- only in
+// the two places that legitimately need a real pixel count once, off the
+// hot path: capturing the aspect ratio when the preview first loads, and
+// labeling "true 100%" once the full image's real size is known.
+let zoomMode='fit',zoomScale=1,lastZoomPaintIndex=-1;
+let panFracX=0.5,panFracY=0.5;
+let fullImageUrl=null,fullImageChecked=false,fullImageLoading=false,fullImageLoadFailed=false;
+let fullSwapped=false;      // true once img.src has been swapped to the full image for THIS photo
+let fullNaturalWidth=0;     // known only once the full image has actually decoded -- label/cap use only
+let naturalAspect=0;        // width/height, captured once per photo from the preview -- see captureAspectFromPreview()
+let fitW=0,fitH=0;          // on-screen px size at zoomScale=1 -- pure arithmetic, never touched by a src swap
+const ZOOM_FALLBACK_CAP=6;  // multiples of fit, used until fullNaturalWidth is known
 
 function stageEl(){return document.querySelector('.stage');}
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
 
+function zoomLog(msg){
+  if(typeof pywebview!=='undefined')pywebview.api.log(msg);
+}
+
+// preview loading only -- never touches the full image. Once fullSwapped
+// is true for this photo, this function must not step on img.src again;
+// that guard is what stops a late onCacheReady/prefetch write from ever
+// reverting a zoomed full-res view back to the small preview.
 function renderStage(){
   const img=$('c-img'),err=$('c-stage-error');
   const p=P[i];
   if(!p){img.removeAttribute('src');img.style.visibility='hidden';err.classList.remove('on');return;}
-  // Once resolved, prefer the full image for the rest of this photo's
-  // viewing session (fit-scale or zoomed — doesn't matter, it's already
-  // loaded, redisplaying it smaller costs nothing) rather than gating on
-  // zoomMode==='zoomed', which only flips *after* the full image has
-  // already loaded and would otherwise create a circular wait.
-  const wantFull=fullImageChecked&&fullImageUrl;
-  const desired=wantFull?fullImageUrl:p.previewUrl;
+  if(fullSwapped){
+    img.style.visibility='visible';
+    err.classList.remove('on');
+    return;
+  }
+  const desired=p.previewUrl;
   if(desired){
-    if(img.src!==desired){
-      if(wantFull){
-        awaitingFullLoad=true;
-        zoomLog(`renderStage: assigning img.src to full image, browser fetch+decode starting: ${desired}`);
-      }
-      img.src=desired;
-    }
+    if(img.src!==desired)img.src=desired;
     img.style.visibility='visible';
     err.classList.remove('on');
   }else{
@@ -790,58 +950,65 @@ function renderStage(){
   }
 }
 
-function zoomLog(msg){
-  if(typeof pywebview!=='undefined')pywebview.api.log(msg);
+// the ONE place naturalWidth is read for geometry purposes, and only once
+// per photo, right when the preview (the first bitmap for any photo) has
+// settled -- never again after that, and never for the full-res swap.
+function captureAspectFromPreview(){
+  const img=$('c-img');
+  if(fullSwapped)return; // this load event is the full image settling in -- geometry is already correct
+  if(img.naturalWidth&&img.naturalHeight)naturalAspect=img.naturalWidth/img.naturalHeight;
+}
+$('c-img').addEventListener('load',captureAspectFromPreview);
+
+// fitW/fitH: pure arithmetic from naturalAspect (captured once above) and
+// the stage's current box -- recomputed when zoom starts and on a stage
+// resize while zoomed, never from whichever src is currently loaded.
+function recomputeFitSize(){
+  const st=stageEl();
+  if(!st||!naturalAspect)return;
+  const stW=st.clientWidth,stH=st.clientHeight;
+  if(stW/stH>naturalAspect){fitH=stH;fitW=stH*naturalAspect;}
+  else{fitW=stW;fitH=stW/naturalAspect;}
 }
 
-// fires for every src renderStage() sets, including plain preview loads —
-// only acts when it's specifically the full-image load we were waiting on
-$('c-img').addEventListener('load',()=>{
-  zoomLog(`img 'load' event fired, src=${$('c-img').src}, awaitingFullLoad=${awaitingFullLoad}`);
-  if(!awaitingFullLoad)return;
-  zoomLog(`decode finished: naturalWidth=${$('c-img').naturalWidth} naturalHeight=${$('c-img').naturalHeight}`);
-  awaitingFullLoad=false;
-  fullImageReady=true;
-  $('zoom-loading').classList.remove('on');
-  if(pendingZoomTarget){
-    zoomLog('applying pending zoom target now that full image is ready');
-    doZoom(pendingZoomTarget.mult,pendingZoomTarget.x,pendingZoomTarget.y);
-    pendingZoomTarget=null;
-    zoomLog('image displayed');
-  }
-});
+function currentDisplaySize(){return {w:fitW*zoomScale,h:fitH*zoomScale};}
 
-// THE GAP: without this, a failed file:// load (bad path, missing file,
-// permission denied) fires 'error' instead of 'load' -- and with nothing
-// listening for it, awaitingFullLoad/fullImageLoading never clear and the
-// "loading full resolution" indicator spins forever with no signal anyone
-// failed. Surfaces to the stage-error UI instead of hanging silently.
-$('c-img').addEventListener('error',()=>{
-  zoomLog(`img 'error' event fired, src=${$('c-img').src}, awaitingFullLoad=${awaitingFullLoad}`);
-  if(!awaitingFullLoad)return;
-  awaitingFullLoad=false;
-  fullImageReady=false;
-  fullImageChecked=true;
-  fullImageUrl=null; // treat as "no usable full image" so we fall back to the preview, not stuck
-  fullImageLoadFailed=true;
-  $('zoom-loading').classList.remove('on');
-  renderStage(); // falls back to the preview since fullImageUrl is now null
-  if(pendingZoomTarget){doZoom(pendingZoomTarget.mult,pendingZoomTarget.x,pendingZoomTarget.y);pendingZoomTarget=null;}
-  updateZoomIndicator();
-});
+function applyDisplaySize(){
+  if(zoomMode!=='zoomed')return; // fit mode: plain CSS (object-fit:contain) governs size, untouched
+  const img=$('c-img'),{w,h}=currentDisplaySize();
+  img.style.width=w+'px';
+  img.style.height=h+'px';
+}
 
-function computeFitScaleFor(w,h){
-  const st=stageEl();
-  if(!w||!h||!st)return 1;
-  return Math.min(1,st.clientWidth/w,st.clientHeight/h);
+// scrollLeft/Top are always a DERIVED view of panFracX/Y, never carried
+// forward as raw pixels -- recomputing them here is what survives a
+// resize or (defensively) a display-size change without drifting.
+function applyScrollFromFraction(){
+  if(zoomMode!=='zoomed')return;
+  const st=stageEl(),{w,h}=currentDisplaySize();
+  const centerX=panFracX*w,centerY=panFracY*h;
+  st.scrollLeft=clamp(centerX-st.clientWidth/2,0,Math.max(0,w-st.clientWidth));
+  st.scrollTop =clamp(centerY-st.clientHeight/2,0,Math.max(0,h-st.clientHeight));
+}
+
+function captureFractionFromScroll(){
+  const st=stageEl(),{w,h}=currentDisplaySize();
+  if(w<=0||h<=0)return;
+  panFracX=clamp((st.scrollLeft+st.clientWidth/2)/w,0,1);
+  panFracY=clamp((st.scrollTop+st.clientHeight/2)/h,0,1);
+}
+
+function zoomCap(){
+  return (fullNaturalWidth&&fitW) ? Math.max(1,(fullNaturalWidth/fitW)*4) : ZOOM_FALLBACK_CAP;
 }
 
 function snapToFit(){
-  zoomMode='fit';zoomScale=1;zoomMultiplier=1;
+  zoomMode='fit';zoomScale=1;panFracX=0.5;panFracY=0.5;
   const st=stageEl(),img=$('c-img');
   st.classList.remove('zoomed');
   img.style.width='';img.style.height='';
-  renderStage();
+  st.scrollLeft=0;st.scrollTop=0;
+  updateZoomIndicator();
 }
 
 // called every paint() — only actually resets when the photo changed, not
@@ -849,108 +1016,124 @@ function snapToFit(){
 // same photo; zoom should only reset on an actual photo change)
 function maybeResetZoomForPaint(){
   if(i===lastZoomPaintIndex)return;
-  // clear the full-image state BEFORE snapToFit() -- it calls renderStage(),
-  // which must see the fresh (cleared) state for the new P[i], not a stale
-  // fullImageUrl left over from whichever photo we're navigating away from
-  fullImageUrl=null;fullImageChecked=false;fullImageReady=false;fullImageLoading=false;
-  awaitingFullLoad=false;pendingZoomTarget=null;fullImageLoadFailed=false;
+  fullImageUrl=null;fullImageChecked=false;fullImageLoading=false;fullImageLoadFailed=false;
+  fullSwapped=false;fullNaturalWidth=0;naturalAspect=0;fitW=0;fitH=0;
   $('zoom-loading').classList.remove('on');
   snapToFit();
   lastZoomPaintIndex=i;
 }
 
-// the actual resize+scroll math. Only ever called once the image currently
-// in #c-img is the SETTLED, authoritative one for this zoom level (full
-// JPEG loaded, or confirmed there isn't one) — so img.naturalWidth/Height
-// are always meaningful here, never mid-swap.
-function doZoom(multiplier,clientX,clientY){
-  const img=$('c-img'),st=stageEl();
-  const w=img.naturalWidth,h=img.naturalHeight;
-  if(!w||!h)return;
-  const fit=computeFitScaleFor(w,h);
-  if(multiplier<=1){snapToFit();return;}
-  const scale=Math.min(ZOOM_MAX,fit*multiplier);
-  zoomMultiplier=scale/fit; // resync so a clamped scale doesn't leave a "dead zone" before zooming out has any visible effect
-
-  const wasZoomed=zoomMode==='zoomed';
-  const prevScale=zoomScale;
-  const rect=st.getBoundingClientRect();
-  const px=clientX!=null?clientX-rect.left:st.clientWidth/2;
-  const py=clientY!=null?clientY-rect.top:st.clientHeight/2;
-  // the point under the cursor, in image-space, must stay under the cursor
-  const imgX=wasZoomed?(st.scrollLeft+px)/prevScale:w/2;
-  const imgY=wasZoomed?(st.scrollTop+py)/prevScale:h/2;
-
-  zoomMode='zoomed';zoomScale=scale;
-  st.classList.add('zoomed');
-  renderStage();
-  img.style.width=(w*scale)+'px';
-  img.style.height=(h*scale)+'px';
-  st.scrollLeft=imgX*scale-px;
-  st.scrollTop=imgY*scale-py;
-  updateZoomIndicator();
-}
-
 function updateZoomIndicator(){
   const pctEl=$('zoom-pct'),noteEl=$('zoom-note');
-  const pct=Math.round(zoomScale*100);
+  const trueScale=(fullNaturalWidth&&fitW)?fullNaturalWidth/fitW:null;
+  const pct=trueScale?Math.round(zoomScale/trueScale*100):Math.round(zoomScale*100);
   pctEl.textContent=pct+'%';
-  const atTrue100=fullImageChecked&&fullImageUrl&&Math.abs(zoomScale-1)<0.005;
+  const atTrue100=!!trueScale&&Math.abs(zoomScale-trueScale)<trueScale*0.01;
   pctEl.classList.toggle('at-100',atTrue100);
   noteEl.textContent = fullImageLoadFailed ? "couldn't load full resolution — see terminal, showing preview"
-    : (fullImageChecked&&!fullImageUrl) ? 'preview resolution — no JPEG for this photo'
+    : (!trueScale) ? 'preview resolution'
     : atTrue100 ? 'true 100%' : '';
 }
 
-// every zoom request (wheel tick) routes through here. If we don't yet
-// know whether this photo has a full-size JPEG, fetch it first (once per
-// photo — cached in fullImageUrl) and hold the request; nothing resizes
-// until the authoritative image is actually ready, so the stage is never
-// caught showing a size computed against the wrong tier.
-function applyZoom(multiplier,clientX,clientY){
+// the visual-zoom hot path. targetScale is a plain "multiple of fit" —
+// nothing here ever reads naturalWidth/naturalHeight, so it produces the
+// exact same on-screen geometry regardless of whether the preview or the
+// full image is currently loaded into #c-img.
+function doZoom(targetScale,clientX,clientY){
+  const cap=zoomCap();
+  const newScale=Math.max(1,Math.min(cap,targetScale));
+  if(newScale<=1){snapToFit();return;}
+
+  const st=stageEl(),img=$('c-img');
+  const wasZoomed=zoomMode==='zoomed';
+  const rect=st.getBoundingClientRect();
+  const px=clientX!=null?clientX-rect.left:st.clientWidth/2;
+  const py=clientY!=null?clientY-rect.top:st.clientHeight/2;
+
+  // the point of the image under the cursor, as a fraction of the image's
+  // own size, at the OLD scale -- this is what "anchor at the cursor"
+  // means, computed purely from CSS-pixel geometry either way:
+  let cursorFracX,cursorFracY;
+  if(wasZoomed){
+    const {w:oldW,h:oldH}=currentDisplaySize();
+    cursorFracX=oldW?clamp((st.scrollLeft+px)/oldW,0,1):0.5;
+    cursorFracY=oldH?clamp((st.scrollTop+py)/oldH,0,1):0.5;
+  }else{
+    // first tick of this gesture: fitW/fitH aren't established yet, and the
+    // image is still laid out by plain flex+object-fit:contain, so read its
+    // rendered box directly (a one-off layout read, not a naturalWidth read)
+    recomputeFitSize();
+    const imgRect=img.getBoundingClientRect();
+    cursorFracX=imgRect.width?clamp((clientX-imgRect.left)/imgRect.width,0,1):0.5;
+    cursorFracY=imgRect.height?clamp((clientY-imgRect.top)/imgRect.height,0,1):0.5;
+  }
+
+  zoomMode='zoomed';zoomScale=newScale;
+  st.classList.add('zoomed');
+  applyDisplaySize();
+
+  const {w:newW,h:newH}=currentDisplaySize();
+  st.scrollLeft=clamp(cursorFracX*newW-px,0,Math.max(0,newW-st.clientWidth));
+  st.scrollTop =clamp(cursorFracY*newH-py,0,Math.max(0,newH-st.clientHeight));
+  captureFractionFromScroll();
+  updateZoomIndicator();
+  ensureFullImage();
+}
+
+// resolution upgrade — fully decoupled from doZoom(). Preloads off-screen
+// so decoding never touches the visible element, then does exactly one
+// thing on success: swapToFullImage(), which is a pure src assignment.
+function ensureFullImage(){
   const p=P[i];
   if(!p||!p.identity)return;
-  if(fullImageChecked){
-    if(fullImageReady)doZoom(multiplier,clientX,clientY);
-    else pendingZoomTarget={mult:multiplier,x:clientX,y:clientY}; // still decoding — remember the latest ask
-    return;
-  }
-  pendingZoomTarget={mult:multiplier,x:clientX,y:clientY};
-  if(fullImageLoading)return;
+  if(fullImageChecked||fullImageLoading)return; // already resolved (success or failure) or in flight for this photo
   fullImageLoading=true;
   fullImageLoadFailed=false;
   $('zoom-loading').classList.add('on');
-  zoomLog(`applyZoom: request received for identity=${p.identity} (${p.name})`);
-  zoomLog('applyZoom: bridge call issued -> get_full_image_url');
+  zoomLog(`ensureFullImage: request received for identity=${p.identity} (${p.name})`);
   pywebview.api.get_full_image_url(p.identity).then(url=>{
-    zoomLog(`applyZoom: bridge call returned, url=${url}`);
     fullImageLoading=false;
     fullImageChecked=true;
-    fullImageUrl=url;
     if(!url){
-      // raw-only pair, no JPEG master — the preview (already loaded) is final
-      zoomLog('applyZoom: no url (raw-only pair) -- falling back to preview, image displayed');
-      fullImageReady=true;
+      zoomLog('ensureFullImage: no url (raw-only pair) -- staying on preview');
       $('zoom-loading').classList.remove('on');
-      if(pendingZoomTarget){doZoom(pendingZoomTarget.mult,pendingZoomTarget.x,pendingZoomTarget.y);pendingZoomTarget=null;}
-    }else{
-      zoomLog('applyZoom: read started (assigning img.src, browser will fetch+decode)');
-      renderStage(); // starts the real load; the 'load'/'error' listeners above finish the job
+      updateZoomIndicator();
+      return;
     }
+    zoomLog(`ensureFullImage: bridge call returned, preloading off-screen: ${url}`);
+    const preloader=new Image();
+    preloader.onload=()=>{
+      zoomLog(`ensureFullImage: preload decoded, naturalWidth=${preloader.naturalWidth} naturalHeight=${preloader.naturalHeight}`);
+      fullImageUrl=url;
+      fullNaturalWidth=preloader.naturalWidth;
+      $('zoom-loading').classList.remove('on');
+      swapToFullImage(url);
+      updateZoomIndicator();
+    };
+    preloader.onerror=()=>{
+      zoomLog(`ensureFullImage: preload FAILED for ${url}`);
+      fullImageLoadFailed=true;
+      $('zoom-loading').classList.remove('on');
+      updateZoomIndicator();
+    };
+    preloader.src=url;
   }).catch(err=>{
-    // THE OTHER GAP: without this, a Python-side exception (or a rejected
-    // bridge call for any reason) left fullImageLoading stuck true forever
-    // — nothing else in this chain would ever clear it or hide the spinner.
-    zoomLog(`applyZoom: bridge call REJECTED: ${err&&err.message?err.message:err}`);
+    zoomLog(`ensureFullImage: bridge call REJECTED: ${err&&err.message?err.message:err}`);
     fullImageLoading=false;
     fullImageChecked=true;
-    fullImageUrl=null;
-    fullImageReady=true;
     fullImageLoadFailed=true;
     $('zoom-loading').classList.remove('on');
-    if(pendingZoomTarget){doZoom(pendingZoomTarget.mult,pendingZoomTarget.x,pendingZoomTarget.y);pendingZoomTarget=null;}
     updateZoomIndicator();
   });
+}
+
+// the ENTIRE resolution-upgrade side effect. Deliberately touches nothing
+// else -- no zoomScale, no fitW/fitH, no scrollLeft/Top -- verified by the
+// swap test below, which asserts every geometry value is byte-identical
+// immediately before and after this call.
+function swapToFullImage(url){
+  $('c-img').src=url;
+  fullSwapped=true;
 }
 
 // wheel: two-finger trackpad scroll AND pinch (WebKit/Chrome/Firefox all
@@ -962,22 +1145,24 @@ function applyZoom(multiplier,clientX,clientY){
 // scrolling untouched. Coalesced through one rAF per frame so a burst of
 // trackpad events doesn't thrash layout, but resize+scroll are always
 // applied together inside doZoom, never split across frames.
-let wheelRaf=null,wheelClientX=0,wheelClientY=0;
+let wheelRaf=null,wheelClientX=0,wheelClientY=0,wheelTargetScale=1;
 stageEl().addEventListener('wheel',e=>{
   e.preventDefault();
-  zoomMultiplier=Math.max(0.05,zoomMultiplier*Math.exp(-e.deltaY*0.0018));
+  const base=wheelRaf?wheelTargetScale:zoomScale;
+  wheelTargetScale=base*Math.exp(-e.deltaY*0.0018);
   wheelClientX=e.clientX;wheelClientY=e.clientY;
   if(wheelRaf)return;
   wheelRaf=requestAnimationFrame(()=>{
     wheelRaf=null;
-    applyZoom(zoomMultiplier,wheelClientX,wheelClientY);
+    doZoom(wheelTargetScale,wheelClientX,wheelClientY);
   });
 },{passive:false});
 
 // pan: Pointer Events + capture, so a fast drag keeps tracking even if the
 // cursor briefly leaves the stage — plain mousemove/mouseup can miss events
-// mid-drag, pointer capture can't. Bounds clamping is free: scrollLeft/Top
-// on a native overflow:auto container are clamped by the browser itself.
+// mid-drag, pointer capture can't. Native scrollLeft/Top drive the drag
+// itself (cheap, immediate), with panFracX/Y kept in sync throughout so a
+// resize mid-drag has a current fraction to recompute from.
 let panPointerId=null,panStartX=0,panStartY=0,panScrollLeft=0,panScrollTop=0;
 const stageElForPan=stageEl();
 stageElForPan.addEventListener('pointerdown',e=>{
@@ -993,6 +1178,7 @@ stageElForPan.addEventListener('pointermove',e=>{
   if(panPointerId===null||e.pointerId!==panPointerId)return;
   stageElForPan.scrollLeft=panScrollLeft-(e.clientX-panStartX);
   stageElForPan.scrollTop=panScrollTop-(e.clientY-panStartY);
+  captureFractionFromScroll();
 });
 function endPan(e){
   if(panPointerId===null||(e&&e.pointerId!==panPointerId))return;
@@ -1318,6 +1504,15 @@ $('grid-scroll').addEventListener('scroll',()=>{if(screen==='s-grid')renderGrid(
 window.addEventListener('resize',()=>{
   if(screen==='s-cull')renderStrip();
   else if(screen==='s-grid')renderGrid();
+  if(zoomMode==='zoomed'){
+    // stage size changed -> fitW/fitH must change too; re-derive display
+    // size and scroll from the SAME panFracX/Y rather than trying to carry
+    // forward raw scrollLeft/Top, which would be meaningless once the
+    // scrollable content's size has changed under it
+    recomputeFitSize();
+    applyDisplaySize();
+    applyScrollFromFraction();
+  }
 });
 
 // ---- review screen: a checkpoint, not a terminus (SPEC.md §6) ----

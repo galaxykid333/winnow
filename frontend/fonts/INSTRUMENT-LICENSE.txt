@@ -1,0 +1,8 @@
+Instrument Sans and Instrument Serif are licensed under the SIL Open Font
+License, Version 1.1 (https://scripts.sil.org/OFL), which permits bundling
+and local redistribution. Files fetched from Google Fonts
+(fonts.googleapis.com / fonts.gstatic.com) and vendored here so the app
+does not depend on network access to render its own UI.
+
+Upstream: https://fonts.google.com/specimen/Instrument+Sans
+          https://fonts.google.com/specimen/Instrument+Serif

@@ -1,13 +1,18 @@
+import os
 from pathlib import Path
 
 import webview
 
 from api import Api
 
+DEBUG = os.environ.get('WINNOW_DEBUG') == '1'
+
 
 def main():
     api = Api()
-    frontend = Path(__file__).resolve().parent / 'frontend' / 'index.html'
+    root = Path(__file__).resolve().parent
+    frontend = root / 'frontend' / 'index.html'
+    icon = root / 'icon' / 'AppIcon.icns'
     # Passing a bare filesystem path here makes pywebview spin up a local
     # http://127.0.0.1 server to serve it (see webview/http.py). That's fine
     # for the page itself, but every <img src="file://..."> we point at the
@@ -27,7 +32,7 @@ def main():
         min_size=(800, 600),
         background_color='#131519',
     )
-    webview.start(debug=True)  # right-click -> Inspect Element
+    webview.start(debug=DEBUG, icon=str(icon))  # WINNOW_DEBUG=1 python3 main.py -> right-click -> Inspect Element
 
 
 if __name__ == '__main__':

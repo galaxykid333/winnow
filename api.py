@@ -71,6 +71,14 @@ class Api:
         self._records_by_identity = {r.identity: r for r in records}
         window.evaluate_js(f'onScanComplete({json.dumps(self._date_summary())})')
 
+    def get_date_summary(self):
+        """Same shape as the payload onScanComplete pushes, but callable any
+        time — used when returning to the calendar from culling to refresh
+        reviewed-counts without re-scanning the input folder. Reuses
+        self._records_by_date from the last scan; only the reviewed counts
+        (a cheap SQLite query) are recomputed."""
+        return self._date_summary()
+
     def _date_summary(self):
         reviewed = state.all_reviewed_identities()
         return [

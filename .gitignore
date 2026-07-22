@@ -1,4 +1,38 @@
+# Photos and generated previews — never commit these
+*.ORF
+*.orf
+*.JPG
+*.jpg
+*.JPEG
+*.jpeg
+*.RAW
+*.raw
+*.xmp
+cache/
+previews/
+thumbnails/
+sessions/
+output/
+
+# Python
 __pycache__/
-*.pyc
-.DS_Store
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Packaged app
+build/
+dist/
+*.app/
+
+# Local config, state, logs
+.env
+config.local.json
+*.sqlite
+*.db
 winnow.log
+
+# macOS
+.DS_Store
