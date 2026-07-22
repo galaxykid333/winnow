@@ -1,6 +1,6 @@
 """Two-tier, disk-backed image cache: small thumbnails for the strip/grid,
 larger previews for the main cull view. Kept as separate directories, per
-SESSION-FLOW.md §7 — a grid re-tiling shouldn't have to wait on preview-sized
+docs/SESSION-FLOW.md §7 — a grid re-tiling shouldn't have to wait on preview-sized
 files, and vice versa.
 
 Generation never blocks the caller: CacheManager.request() returns the cached
@@ -21,7 +21,7 @@ import traceback
 
 from PIL import Image, ImageOps
 
-import exiftool_path
+from . import exiftool_path
 
 CACHE_ROOT = os.path.expanduser('~/Library/Application Support/Winnow/cache')
 

@@ -8,13 +8,13 @@ from pathlib import Path
 
 import webview
 
-import cache
-import exiftool_path
-import output
-import state
-import vocab
-from cache import CacheManager
-from ingest import group_by_date, scan_input_folder
+from . import cache
+from . import exiftool_path
+from . import output
+from . import state
+from . import vocab
+from .cache import CacheManager
+from .ingest import group_by_date, scan_input_folder
 
 CONFIG_PATH = os.path.expanduser('~/Library/Application Support/Winnow/config.json')
 
@@ -37,7 +37,7 @@ class Api:
 
     def get_species_vocabulary(self):
         """Subject tag vocabulary (birds, mammals, ...) for the tag field's
-        autocomplete — merged from every *-tags.json in the repo root, see
+        autocomplete — merged from every *-tags.json in data/, see
         vocab.py. Loaded once at startup by the front-end."""
         return vocab.load_species_vocabulary()
 

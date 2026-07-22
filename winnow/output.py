@@ -1,6 +1,6 @@
 """Writes a session to disk: copies (or moves) each kept photo's master
 file into the destination folder and writes an XMP sidecar next to it —
-SPEC.md §5, build order step 8.
+docs/SPEC.md §5, build order step 8.
 
 Never destructive on failure. Every write lands at a temp name first and is
 only renamed into place after a size check (file copies) or a read-back
@@ -8,7 +8,7 @@ check (XMP sidecars) confirms it's good — so a cancelled or crashed write
 never leaves a half-written sidecar, and never leaves a partially-copied
 file that a later skip-on-size-match resume would mistake for complete.
 
-Resumable per SESSION-FLOW.md §6.1: a master file already present at the
+Resumable per docs/SESSION-FLOW.md §6.1: a master file already present at the
 destination with a matching size is left alone. XMP sidecars are always
 regenerated from current tags — cheap to rewrite, and the whole reason the
 review screen lets you go back and fix tags is that a stale sidecar
@@ -20,8 +20,8 @@ import os
 import shutil
 import subprocess
 
-import exiftool_path
-import vocab
+from . import exiftool_path
+from . import vocab
 
 XMP_TIMEOUT = 30
 
@@ -59,13 +59,13 @@ def _xmp_tags(record):
     for s in record['sp']:
         # a photo's sp list only stores the common name (e.g. "Roe deer") --
         # branch_for_name recovers which parallel XMP branch it belongs to
-        # (Bird|/Mammal|/Amphibian|/Reptile|/...), per SPEC.md §7
+        # (Bird|/Mammal|/Amphibian|/Reptile|/...), per docs/SPEC.md §7
         tags.append(f'{vocab.branch_for_name(s)}|{s}')
     for n in record['nt']:
         tags.append(f'Note|{n}')
     if record.get('location'):
         tags.append(f'Site|{record["location"]}')
-    tags.append('Status|Confirmed')  # v1 is manual-only — see SPEC.md §9
+    tags.append('Status|Confirmed')  # v1 is manual-only — see docs/SPEC.md §9
     return tags
 
 
@@ -183,7 +183,7 @@ def write_session(dest_dir, records, options, progress_cb=None, cancel_check=Non
             entry['master_path'] = master_dest
             if options.get('raw_handling') == 'move' and record.get('raw_path'):
                 # Only ever delete the source after a verified copy exists —
-                # moving before verifying is the exact risk SPEC.md §5 and
+                # moving before verifying is the exact risk docs/SPEC.md §5 and
                 # CLAUDE.md both call out.
                 os.remove(master)
                 entry['master_status'] = 'moved'

@@ -3,10 +3,10 @@
 Desktop app (macOS) for culling and tagging bird photographs. pywebview shell +
 Python backend + vanilla HTML/CSS/JS front-end. Single user.
 
-Full build spec: `SPEC.md`. Read it before starting a new build step.
-Session flow and navigation: `SESSION-FLOW.md` — supersedes SPEC.md §5–6 on
-the start screen and cull-screen navigation.
-Validated interaction design: `winnow-prototype.html` — reproduce its behaviour,
+Full build spec: `docs/SPEC.md`. Read it before starting a new build step.
+Session flow and navigation: `docs/SESSION-FLOW.md` — supersedes docs/SPEC.md
+§5–6 on the start screen and cull-screen navigation.
+Validated interaction design: `docs/prototype.html` — reproduce its behaviour,
 don't reinvent it. Its dot strip and single-folder start screen are superseded.
 
 ## Hard constraints
@@ -32,7 +32,7 @@ constraints, not preferences.
 
 No bird detection, no species ID, no ML of any kind. v1 is the manual workflow
 only. The suggestion row in the tag field is the socket the model will fill
-later; leave it in place and leave it empty. See SPEC.md §9.
+later; leave it in place and leave it empty. See docs/SPEC.md §9.
 
 ## Gotchas
 

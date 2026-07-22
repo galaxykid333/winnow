@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Optional
 
-import exiftool_path
+from . import exiftool_path
 
 RAW_EXTS = {'.orf'}
 JPEG_EXTS = {'.jpg', '.jpeg'}
@@ -24,7 +24,7 @@ _PROGRESS_RE = re.compile(r'\[(\d+)/(\d+)\]\s*$')
 
 @dataclass
 class PhotoRecord:
-    identity: str          # stable id: stem + capture second, see SESSION-FLOW.md §7
+    identity: str          # stable id: stem + capture second, see docs/SESSION-FLOW.md §7
     stem: str
     jpg_path: Optional[str]
     raw_path: Optional[str]

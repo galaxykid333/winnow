@@ -7,7 +7,7 @@ A desktop app for culling and tagging bird photographs, for a single user
 itself. It's also the drumming display flight of a snipe, made by air through
 the outer tail feathers. Both readings are intended.
 
-Hand this file plus `winnow-prototype.html` to Claude Code. The
+Hand this file plus `prototype.html` to Claude Code. The
 prototype is the validated interaction design — the real app should reproduce
 its behaviour, not reinvent it.
 
@@ -173,8 +173,8 @@ list only ever stores the common name, e.g. "Roe deer" — see
 file falls back to `Bird|`, so tags written before this existed stay valid
 with no migration.
 
-**Vocabulary is data-driven, not hardcoded.** Every `*-tags.json` file in the
-repo root defines one branch:
+**Vocabulary is data-driven, not hardcoded.** Every `*-tags.json` file in
+`data/` defines one branch:
 
 ```json
 {
@@ -183,10 +183,10 @@ repo root defines one branch:
 }
 ```
 
-`bird-tags.json` and `wildlife-tags.json` (mammals, amphibians, reptiles) ship
-with the app; adding a new branch — butterflies, dragonflies — means dropping
-in another file with the same shape, no code change. `_aliases` maps a typed
-phrase to the canonical common name it should resolve to, so `european
+`data/bird-tags.json` and `data/wildlife-tags.json` (mammals, amphibians,
+reptiles) ship with the app; adding a new branch — butterflies, dragonflies —
+means dropping in another file with the same shape, no code change. `_aliases`
+maps a typed phrase to the canonical common name it should resolve to, so `european
 rabbit` finds Rabbit and `muntjac` finds Muntjac even though neither is the
 literal listed name. The front-end loads and merges all of them into one
 searchable index at startup (`vocab.py` on the Python side); typing `ro`
@@ -203,7 +203,7 @@ list with aliases so `baby` finds Juvenile and `bif` finds In flight:
 Unrecognised input offers itself as a new note on the last suggestion and joins
 the list. Persist user-created notes across sessions in a config file.
 
-**Species list:** `bird-tags.json` carries ~190 common British species with
+**Species list:** `data/bird-tags.json` carries ~190 common British species with
 scientific names (the full BOU British list is a future replacement for that
 one file, not a code change). Match on word-start across all words, so `godw`
 finds both godwits — the same matching applies uniformly across every

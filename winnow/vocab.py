@@ -1,8 +1,8 @@
 """Subject tag vocabulary (birds, mammals, amphibians, reptiles, ...) is
-data-driven: any `*-tags.json` file in the repo root defines one or more
-parallel XMP branches. Adding a new branch (e.g. butterflies) means
-dropping in a new JSON file with the same shape -- no code change here.
-See SPEC.md §7.
+data-driven: any `*-tags.json` file in data/ defines one or more parallel
+XMP branches. Adding a new branch (e.g. butterflies) means dropping in a
+new JSON file with the same shape -- no code change here. See
+docs/SPEC.md §7.
 
 Schema per file:
     {
@@ -18,14 +18,19 @@ recovers which XMP branch a name belongs to when it writes the sidecar.
 import glob
 import json
 import os
+from pathlib import Path
 
-REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+# Resolved from this module's own location, not the working directory --
+# the app is routinely launched by double-clicking a .app bundle, where cwd
+# is unpredictable (Finder, launchd, or whatever last called `open`), not
+# necessarily the repo root.
+DATA_DIR = Path(__file__).resolve().parent.parent / 'data'
 
 _cache = None
 
 
 def load_species_vocabulary(force_reload=False):
-    """Merge every *-tags.json in the repo root into one vocabulary:
+    """Merge every *-tags.json in data/ into one vocabulary:
     {'branches': {branch: [[common, sci], ...], ...}, 'aliases': {alias: canonical}}.
     Cached after the first call -- these files don't change during a run."""
     global _cache
@@ -34,7 +39,7 @@ def load_species_vocabulary(force_reload=False):
 
     branches = {}
     aliases = {}
-    for path in sorted(glob.glob(os.path.join(REPO_ROOT, '*-tags.json'))):
+    for path in sorted(glob.glob(os.path.join(DATA_DIR, '*-tags.json'))):
         with open(path) as f:
             data = json.load(f)
         for key, entries in data.items():

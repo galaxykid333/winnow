@@ -1,16 +1,16 @@
 """Session and review-state persistence. An interrupted session must resume
-exactly where it stopped (SPEC.md build step 7) — every verdict/tag change
+exactly where it stopped (docs/SPEC.md build step 7) — every verdict/tag change
 here writes through immediately, so a crash loses at most the one in-flight
 action, never the whole session.
 
 Lives in ~/Library/Application Support/Winnow/, not the input folder (which
 is read-only) and not the destination folder (which may not exist yet, or
-may get renamed) — see SESSION-FLOW.md §7.
+may get renamed) — see docs/SESSION-FLOW.md §7.
 
 Keyed by (dest_path, photo identity). `dest_path` is the resume key: opening
 the same destination folder again is what "resuming" means, per
-SESSION-FLOW.md §2.3. Photo identity is ingest.py's stem+capture-second id,
-stable across rescans — see SESSION-FLOW.md §7.
+docs/SESSION-FLOW.md §2.3. Photo identity is ingest.py's stem+capture-second id,
+stable across rescans — see docs/SESSION-FLOW.md §7.
 """
 
 import json
@@ -128,7 +128,7 @@ def save_verdict(dest_path, identity, verdict, great, sp, nt):
 
 def all_reviewed_identities():
     """Every photo identity with a verdict, across all sessions — used to
-    paint the calendar's reviewed-fraction ring (SESSION-FLOW.md §2.2).
+    paint the calendar's reviewed-fraction ring (docs/SESSION-FLOW.md §2.2).
     Deliberately not scoped to one session: whether a given photo has been
     looked at is a global fact about that photo, not the folder it was
     reviewed under."""

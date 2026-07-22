@@ -3,7 +3,7 @@ from pathlib import Path
 
 import webview
 
-from api import Api
+from winnow.api import Api
 
 DEBUG = os.environ.get('WINNOW_DEBUG') == '1'
 
@@ -12,7 +12,7 @@ def main():
     api = Api()
     root = Path(__file__).resolve().parent
     frontend = root / 'frontend' / 'index.html'
-    icon = root / 'icon' / 'AppIcon.icns'
+    icon = root / 'assets' / 'AppIcon.icns'
     # Passing a bare filesystem path here makes pywebview spin up a local
     # http://127.0.0.1 server to serve it (see webview/http.py). That's fine
     # for the page itself, but every <img src="file://..."> we point at the
