@@ -1,19 +1,13 @@
 # Winnow
 
-Desktop app for culling and tagging bird and wildlife photographs. macOS,
-single user: a pywebview shell over a Python backend, with a vanilla
-HTML/CSS/JS front-end (no build step).
+Desktop app for culling and tagging bird and wildlife photographs. pywebview shell over a Python backend, with a vanilla HTML/CSS/JS front-end (no build step).
 
-To winnow is to separate grain from chaff — the culling operation itself.
-It's also the drumming display flight of a snipe, made by air through the
-outer tail feathers.
+To winnow is to separate grain from chaff, which is the culling operation itself. It's also the drumming display flight of a snipe, made by air through the outer tail feathers.
 
 ## What it does
 
-Ingests RAW+JPEG pairs from an SD card, lets you cull (keep / keep & mark
-great / discard) and tag species and notes one photo at a time, then writes
-XMP sidecars next to copies of the kept RAWs. The input folder is read-only —
-nothing there is ever modified or deleted.
+Ingests RAW+JPEG pairs from an SD card. You cull and tag one photo at a time (keep, keep and mark great, or discard), then it copies the kept RAWs to a destination folder and writes XMP sidecars alongside them, which allows future querying. 
+
 
 ## Requirements
 
