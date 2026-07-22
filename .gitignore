@@ -34,5 +34,10 @@ config.local.json
 *.db
 winnow.log
 
+# Claude Code: settings.local.json is per-developer (permission grants tied
+# to this machine's paths), unlike settings.json, which would be shared
+# project config if one exists here.
+.claude/settings.local.json
+
 # macOS
 .DS_Store
